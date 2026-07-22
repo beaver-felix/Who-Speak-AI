@@ -1,9 +1,9 @@
 # Who-Speak-AI
-Who-Speak-AI is a secured voice-based Virtual Assistant capable of supporting users with ___ task(s). Built-in Speark Verification helpspersonalize the user experience for appropriate functions.
+Who-Speak-AI is a secured voice-based Virtual Assistant capable of supporting users with various task(s). Built-in Speark Verification enable user(s) to experience the most personalized functions.
 
 ## Requirements
 ```
-python >= 3.14
+python >= 3.12
 ...
 ```
 
