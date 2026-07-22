@@ -18,4 +18,4 @@ python >= 3.12
 |---|---|
 |Nguyen Manh Cuong|23127034|
 |Nguyen Tran Thien An|23127315|
-|Nguyen Dong Thannh|23127538|
+|Nguyen Dong Thanh|23127538|
