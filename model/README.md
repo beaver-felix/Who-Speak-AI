@@ -7,9 +7,13 @@
 | **ERes2Net-large** | Local-global feature fusion via channel-wise multi-scale Res2Net blocks | [modelscope/3D-Speaker](https://github.com/modelscope/3D-Speaker) |
 | **RawNet3** | Raw audio waveform processing directly (eliminates STFT/MFCC conversion) | [Jungjee/RawNet](https://github.com/Jungjee/RawNet) |
 | **WavLM + MHFA** | Pre-trained SSL transformer encoder + Multi-Head Factorized Attentive Pooling | [theolepage/wavlm_ssl_sv](https://github.com/theolepage/wavlm_ssl_sv) |
+<<<<<<< HEAD
 Note:
 - ECAPA-TDNN, ERes2Net-large, and RawNet3 will be evaluated both before and after LoRA fine-tuning.
 - WavLM + MHFA will be evaluated only in its pretrained form due to project time constraints and computational cost.
+=======
+note: only evaluate `WavLM + MHFA`, no fine-tune.
+>>>>>>> refs/remotes/origin/main
 
 ## Dataset Information
 | Name | Focus / Language | Description | src |
