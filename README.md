@@ -7,6 +7,11 @@ python >= 3.12
 ...
 ```
 
+## Repository Structure
+```
+...
+```
+
 ## Deployment Guide
 ...
 
