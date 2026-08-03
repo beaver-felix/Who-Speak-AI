@@ -1,22 +1,22 @@
 # Speaker Verification Resources
 
-## Model & Toolkit Information
-| Name | src | Notes |
+## Model Architectures
+| Architecture | Core Concept / Mechanism | Reference Implementation |
 |---|---|---|
-| ECAPA-TDNN | https://github.com/TaoRuijie/ECAPA-TDNN | Standard baseline implementation for Emphasized Channel Attention TDNN |
-| RawNet3 | https://github.com/Jungjee/RawNet | Raw audio waveform-based speaker verification architecture |
-| WeSpeaker | https://github.com/wenet-e2e/wespeaker | Production-oriented toolkit with SOTA models (ResNet, CAM++, ERes2Net) |
-| 3D-Speaker | https://github.com/modelscope/3D-Speaker | Alibaba's SV toolkit supporting single/multi-modal & multi-dialect models |
-| SpeechBrain | https://github.com/speechbrain/speechbrain | Popular PyTorch speech toolkit with pre-trained ECAPA-TDNN & X-vector models |
-| pyannote.audio | https://github.com/pyannote/pyannote-audio | Neural building blocks for speaker verification, embeddings, and diarization |
+| **ECAPA-TDNN** | Channel attention, multi-layer aggregation, D-TDNN backbone | [TaoRuijie/ECAPA-TDNN](https://github.com/TaoRuijie/ECAPA-TDNN) |
+| **ERes2Net / ERes2NetV2** | Local-global feature fusion via channel-wise multi-scale Res2Net blocks | [modelscope/3D-Speaker](https://github.com/modelscope/3D-Speaker) |
+| **CAM++** | Context-Aware Masking with Densely Connected TDNN (fast inference) | [modelscope/3D-Speaker](https://github.com/modelscope/3D-Speaker) |
+| **RawNet2 / RawNet3** | Raw audio waveform processing directly (eliminates STFT/MFCC conversion) | [Jungjee/RawNet](https://github.com/Jungjee/RawNet) |
+| **ResNet34 + ASP** | 2D Spectro-temporal CNN paired with Attentive Statistics Pooling | [clovaai/voxceleb_trainer](https://github.com/clovaai/voxceleb_trainer) |
+| **WavLM + MHFA / Conformer** | Pre-trained SSL transformer encoder + Multi-Head Factorized Attentive Pooling | [theolepage/wavlm_ssl_sv](https://github.com/theolepage/wavlm_ssl_sv) |
 
 ## Dataset Information
-| Name | src | Notes |
-|---|---|---|
-| VoxCeleb 1 & 2 | https://www.robots.ox.ac.uk/~vgg/data/voxceleb/ | Gold standard benchmark datasets for speaker verification |
-| CN-Celeb | https://www.openslr.org/82/ | Large-scale multi-genre speaker recognition dataset |
-| DeepMine | https://www.openslr.org/103/ | Large-scale dataset for text-dependent & independent SV |
-| 3D-Speaker Dataset | https://github.com/modelscope/3D-Speaker | Large multi-device, multi-distance, and multi-dialect dataset |
-| LibriSpeech | https://www.openslr.org/12/ | Read English speech corpus commonly used for evaluation |
-| VIVOS | https://huggingface.co/datasets/vivos | Vietnamese speech corpus suitable for fine-tuning/evaluating local SV |
-| ViMD Dataset | https://huggingface.co/datasets/nguyendv02/ViMD_Dataset | Vietnamese Multi-Dialect dataset covering speakers across 63 provinces |
+| Name | Focus / Language | Description | src |
+|---|---|---|---|
+| **VoxCeleb 1 & 2** | English / Global | De facto standard benchmark for in-the-wild speaker verification | [VoxCeleb](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/) |
+| **CN-Celeb 1 & 2** | Chinese | Large-scale multi-genre dataset (covers 11 real-world audio genres) | [OpenSLR-82](https://www.openslr.org/82/) |
+| **3D-Speaker Dataset** | Multi-dialect | Multi-device, multi-distance, and multi-dialect benchmark | [3D-Speaker](https://github.com/modelscope/3D-Speaker) |
+| **DeepMine** | Persian / English | Suitable for both text-dependent and text-independent SV research | [OpenSLR-103](https://www.openslr.org/103/) |
+| **Vietnam-Celeb** | Vietnamese | In-the-wild Vietnamese SV benchmark dataset (INTERSPEECH 2023) | [Vietnam-Celeb](https://github.com/thanhpv2102/Vietnam-Celeb.Interspeech) |
+| **ViMD** | Vietnamese | Multi-dialect dataset covering speakers across 63 Vietnamese provinces | [ViMD HF](https://huggingface.co/datasets/nguyendv02/ViMD_Dataset) |
+| **VIVOS** | Vietnamese | Read speech corpus useful for quick fine-tuning or baseline testing | [VIVOS HF](https://huggingface.co/datasets/vivos) |
