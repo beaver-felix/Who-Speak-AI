@@ -7,6 +7,7 @@
 | **ERes2Net-large** | Local-global feature fusion via channel-wise multi-scale Res2Net blocks | [modelscope/3D-Speaker](https://github.com/modelscope/3D-Speaker) |
 | **RawNet3** | Raw audio waveform processing directly (eliminates STFT/MFCC conversion) | [Jungjee/RawNet](https://github.com/Jungjee/RawNet) |
 | **WavLM + MHFA** | Pre-trained SSL transformer encoder + Multi-Head Factorized Attentive Pooling | [theolepage/wavlm_ssl_sv](https://github.com/theolepage/wavlm_ssl_sv) |
+note: only evaluate `WavLM + MHFA`, no fine-tune.
 
 ## Dataset Information
 | Name | Focus / Language | Description | src |
