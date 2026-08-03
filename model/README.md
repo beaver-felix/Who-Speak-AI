@@ -11,9 +11,6 @@
 Note:
 - ECAPA-TDNN, ERes2Net-large, and RawNet3 will be evaluated both before and after LoRA fine-tuning.
 - WavLM + MHFA will be evaluated only in its pretrained form due to project time constraints and computational cost.
-=======
-note: only evaluate `WavLM + MHFA`, no fine-tune.
->>>>>>> refs/remotes/origin/main
 
 ## Dataset Information
 | Name | Focus / Language | Description | src |
