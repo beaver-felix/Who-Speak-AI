@@ -19,8 +19,8 @@ python >= 3.12
 ...
 
 ## Contributors' Information
-|Contributor|Student ID|
-|---|---|
-|Nguyen Manh Cuong|23127034|
-|Nguyen Tran Thien An|23127315|
-|Nguyen Dong Thanh|23127538|
+|Contributor|Student ID|Email|
+|---|---|---|
+|Nguyen Manh Cuong|23127034|nmcuong23@clc.fitus.edu.vn|
+|Nguyen Tran Thien An|23127315|nttan23@clc.fitus.edu.vn|
+|Nguyen Dong Thanh|23127538|ndthanh23@clc.fitus.edu.vn|
