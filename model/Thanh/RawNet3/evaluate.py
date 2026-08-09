@@ -12,7 +12,7 @@ import torch
 import yaml
 
 from dataset import VerificationPairDataset, build_dataloader, load_verification_pairs
-from metrics import compute_verification_metrics, save_metrics
+from metrics import compute_verification_metrics, save_evaluation_csv, save_metrics
 from model import build_model, extract_speaker_embedding
 
 
@@ -60,6 +60,14 @@ def load_checkpoint_model(checkpoint_path: Path, device: torch.device) -> torch.
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     return model.to(device).eval()
+
+
+def resolve_output_path(config_path: Path, configured_path: str) -> Path:
+    """Resolve an output path relative to its YAML configuration file."""
+    output_path = Path(configured_path)
+    if not output_path.is_absolute():
+        output_path = config_path.resolve().parent / output_path
+    return output_path
 
 
 def main() -> None:
@@ -128,12 +136,27 @@ def main() -> None:
     )
     output_path = args.output
     if output_path is None:
-        output_path = Path(__file__).resolve().parent.parent / "results" / "rawnet3_metrics.json"
+        output_path = resolve_output_path(
+            args.config,
+            config["outputs"]["metrics_json"],
+        )
     saved_path = save_metrics(metric_output, output_path)
+    csv_output_path = resolve_output_path(
+        args.config,
+        config["outputs"]["metrics_csv"],
+    )
+    saved_csv_path = save_evaluation_csv(
+        metric_output,
+        model_id=config["project"]["name"],
+        output_path=csv_output_path,
+    )
     print(f"EER={metric_output['eer']:.6f}")
+    print(f"FAR={metric_output['far']:.6f}")
+    print(f"FRR={metric_output['frr']:.6f}")
     print(f"minDCF={metric_output['min_dcf']:.6f}")
     print(f"accuracy={metric_output['accuracy']:.6f}")
     print(f"saved_metrics={saved_path}")
+    print(f"saved_csv={saved_csv_path}")
 
 
 if __name__ == "__main__":

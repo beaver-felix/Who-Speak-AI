@@ -58,4 +58,5 @@ runtime:
 
 outputs:
   metrics_json: ../results/wavlm_metrics.json
+  metrics_csv: ../results/wavlm_metrics.csv
   checkpoint_directory: ../checkpoints/wavlm

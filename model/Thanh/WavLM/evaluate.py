@@ -21,7 +21,11 @@ from RawNet3.dataset import (  # noqa: E402
     build_dataloader,
     load_verification_pairs,
 )
-from RawNet3.metrics import compute_verification_metrics, save_metrics  # noqa: E402
+from WavLM.metrics import (  # noqa: E402
+    compute_verification_metrics,
+    save_evaluation_csv,
+    save_metrics,
+)
 from WavLM.model import build_model, extract_speaker_embedding  # noqa: E402
 
 
@@ -64,6 +68,14 @@ def resolve_checkpoint_path(
     if not directory.is_absolute():
         directory = config_path.resolve().parent / directory
     return directory / "best_model.pt"
+
+
+def resolve_output_path(config_path: Path, configured_path: str) -> Path:
+    """Resolve an output path relative to its YAML configuration file."""
+    output_path = Path(configured_path)
+    if not output_path.is_absolute():
+        output_path = config_path.resolve().parent / output_path
+    return output_path
 
 
 def load_checkpoint_model(path: Path, device: torch.device) -> torch.nn.Module:
@@ -155,12 +167,27 @@ def main() -> None:
             "latency_ms_per_trial": elapsed * 1000.0 / len(scores),
         }
     )
-    output_path = args.output or (THANH_ROOT / "results" / "wavlm_metrics.json")
+    output_path = args.output or resolve_output_path(
+        args.config,
+        config["outputs"]["metrics_json"],
+    )
     saved_path = save_metrics(metrics, output_path)
+    csv_output_path = resolve_output_path(
+        args.config,
+        config["outputs"]["metrics_csv"],
+    )
+    saved_csv_path = save_evaluation_csv(
+        metrics,
+        model_id=config["project"]["name"],
+        output_path=csv_output_path,
+    )
     print(f"EER={metrics['eer']:.6f}")
+    print(f"FAR={metrics['far']:.6f}")
+    print(f"FRR={metrics['frr']:.6f}")
     print(f"minDCF={metrics['min_dcf']:.6f}")
     print(f"accuracy={metrics['accuracy']:.6f}")
     print(f"saved_metrics={saved_path}")
+    print(f"saved_csv={saved_csv_path}")
 
 
 if __name__ == "__main__":

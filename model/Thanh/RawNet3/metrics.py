@@ -8,6 +8,7 @@ small inference or evaluation environment without adding a metrics package.
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -17,6 +18,16 @@ import numpy as np
 DEFAULT_METRICS_PATH = (
     Path(__file__).resolve().parent.parent / "results" / "rawnet3_metrics.json"
 )
+
+REQUIRED_CSV_FIELDS = [
+    "ID",
+    "EER",
+    "FAR",
+    "FRR",
+    "TAR@FAR 5%",
+    "TAR@FAR 1%",
+    "TAR@FAR 0.1%",
+]
 
 
 def _validate_inputs(
@@ -87,6 +98,68 @@ def _operating_points(
     false_accept_rate = np.r_[0.0, false_accept_rate[last_in_group]]
     false_reject_rate = np.r_[1.0, false_reject_rate[last_in_group]]
     return thresholds, false_accept_rate, false_reject_rate
+
+
+def compute_far_frr(
+    scores: Sequence[float] | np.ndarray,
+    labels: Sequence[int] | np.ndarray,
+    threshold: float,
+) -> tuple[float, float]:
+    """Compute FAR and FRR at one verification decision threshold.
+
+    A trial is accepted as genuine when ``score >= threshold``.
+
+    Returns:
+        A tuple ``(far, frr)`` expressed as fractions in ``[0, 1]``.
+    """
+    score_array, label_array = _validate_inputs(scores, labels)
+    accepted = score_array >= threshold
+    genuine = label_array == 1
+    impostor = label_array == 0
+
+    # FAR counts impostors that the system incorrectly accepts.
+    far = np.mean(accepted[impostor])
+    # FRR counts genuine speakers that the system incorrectly rejects.
+    frr = np.mean(~accepted[genuine])
+    return float(far), float(frr)
+
+
+def compute_tar_at_far(
+    scores: Sequence[float] | np.ndarray,
+    labels: Sequence[int] | np.ndarray,
+    target_far: float,
+) -> dict[str, float | None]:
+    """Find the highest TAR without exceeding a requested FAR.
+
+    Empirical scores produce discrete operating points, so an exact requested
+    FAR may not exist. The selected threshold maximizes TAR among all points
+    whose measured FAR is less than or equal to ``target_far``.
+    """
+    if not 0.0 <= target_far <= 1.0:
+        raise ValueError("target_far must be between 0 and 1")
+
+    score_array, label_array = _validate_inputs(scores, labels)
+    thresholds, false_accept_rates, false_reject_rates = _operating_points(
+        score_array, label_array
+    )
+    true_accept_rates = 1.0 - false_reject_rates
+    tolerance = np.finfo(np.float64).eps
+    eligible = np.flatnonzero(false_accept_rates <= target_far + tolerance)
+
+    best_tar = np.max(true_accept_rates[eligible])
+    tied = eligible[np.isclose(true_accept_rates[eligible], best_tar)]
+    # For equal TAR, use the point closest to the allowed FAR boundary.
+    best_index = int(tied[np.argmax(false_accept_rates[tied])])
+    selected_threshold = thresholds[best_index]
+
+    return {
+        "tar": float(true_accept_rates[best_index]),
+        "far": float(false_accept_rates[best_index]),
+        "frr": float(false_reject_rates[best_index]),
+        "threshold": (
+            float(selected_threshold) if np.isfinite(selected_threshold) else None
+        ),
+    }
 
 
 def _eer_details(
@@ -188,26 +261,82 @@ def compute_verification_metrics(
     labels: Sequence[int] | np.ndarray,
     target_prior: float = 0.01,
 ) -> dict[str, Any]:
-    """Compute the standard RawNet3 verification metric set.
+    """Compute the complete project speaker-verification metric set.
 
-    Accuracy is reported at the empirical threshold closest to the EER
-    operating point. The selected threshold is included for reproducibility.
+    FAR, FRR, and accuracy are reported at the empirical threshold closest to
+    EER. TAR@FAR uses an independently selected threshold for each FAR limit.
     """
     score_array, label_array = _validate_inputs(scores, labels)
     eer, eer_threshold = _eer_details(score_array, label_array)
+    far_at_eer, frr_at_eer = compute_far_frr(
+        score_array, label_array, eer_threshold
+    )
+    tar_at_far_5 = compute_tar_at_far(score_array, label_array, target_far=0.05)
+    tar_at_far_1 = compute_tar_at_far(score_array, label_array, target_far=0.01)
+    tar_at_far_0_1 = compute_tar_at_far(
+        score_array, label_array, target_far=0.001
+    )
+
     return {
         "eer": eer,
         "eer_percent": eer * 100.0,
+        "far": far_at_eer,
+        "frr": frr_at_eer,
         "min_dcf": compute_min_dcf(
             score_array, label_array, target_prior=target_prior
         ),
         "accuracy": compute_accuracy(score_array, label_array, eer_threshold),
         "decision_threshold": eer_threshold,
+        "tar_at_far_5_percent": tar_at_far_5["tar"],
+        "tar_at_far_1_percent": tar_at_far_1["tar"],
+        "tar_at_far_0_1_percent": tar_at_far_0_1["tar"],
+        "threshold_at_far_5_percent": tar_at_far_5["threshold"],
+        "threshold_at_far_1_percent": tar_at_far_1["threshold"],
+        "threshold_at_far_0_1_percent": tar_at_far_0_1["threshold"],
+        "actual_far_5_percent": tar_at_far_5["far"],
+        "actual_far_1_percent": tar_at_far_1["far"],
+        "actual_far_0_1_percent": tar_at_far_0_1["far"],
         "num_trials": int(label_array.size),
         "num_genuine": int(np.sum(label_array == 1)),
         "num_impostor": int(np.sum(label_array == 0)),
         "target_prior": target_prior,
     }
+
+
+def save_evaluation_csv(
+    metrics: Mapping[str, Any],
+    model_id: str,
+    output_path: str | Path,
+) -> Path:
+    """Save mandatory evaluation fields as percentage values.
+
+    Internal metric values are fractions. For example, EER ``0.0125`` is
+    written as ``1.25`` in the report-ready CSV file.
+    """
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    percentage = 100.0
+    row = {
+        "ID": model_id,
+        "EER": round(float(metrics["eer"]) * percentage, 6),
+        "FAR": round(float(metrics["far"]) * percentage, 6),
+        "FRR": round(float(metrics["frr"]) * percentage, 6),
+        "TAR@FAR 5%": round(
+            float(metrics["tar_at_far_5_percent"]) * percentage, 6
+        ),
+        "TAR@FAR 1%": round(
+            float(metrics["tar_at_far_1_percent"]) * percentage, 6
+        ),
+        "TAR@FAR 0.1%": round(
+            float(metrics["tar_at_far_0_1_percent"]) * percentage, 6
+        ),
+    }
+
+    with destination.open("w", encoding="utf-8", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=REQUIRED_CSV_FIELDS)
+        writer.writeheader()
+        writer.writerow(row)
+    return destination
 
 
 def save_metrics(

@@ -54,4 +54,5 @@ runtime:
 
 outputs:
   metrics_json: ../results/rawnet3_metrics.json
+  metrics_csv: ../results/rawnet3_metrics.csv
   checkpoint_directory: ../checkpoints/rawnet3
