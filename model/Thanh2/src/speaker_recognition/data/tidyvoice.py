@@ -107,6 +107,50 @@ def iter_tidyvoice_audio_paths(
 
                 yield audio_path
 
+def collect_tidyvoice_speaker_language_counts(
+    dataset_root: str | Path,
+    *,
+    source_split: str,
+) -> dict[str, dict[str, int]]:
+    """Count utterances per speaker and language without decoding audio.
+
+    These profiles are the metadata input to the balanced group splitter.
+
+    Parameters
+    ----------
+    dataset_root:
+        Root containing the TidyVoice source branches.
+    source_split:
+        Source partition to scan: ``train`` or ``dev``.
+
+    Returns
+    -------
+    dict[str, dict[str, int]]
+        Dataset-scoped speaker IDs mapped to language-count dictionaries.
+        Speaker and language keys use deterministic lexical ordering.
+    """
+    profiles: dict[str, dict[str, int]] = {}
+
+    for audio_path in iter_tidyvoice_audio_paths(
+        dataset_root,
+        source_split=source_split,
+    ):
+        # The scanner has already validated the
+        # <speaker>/<language>/<file> hierarchy.
+        speaker_id = f"tidyvoice:{audio_path.parent.parent.name}"
+        language = audio_path.parent.name
+
+        language_counts = profiles.setdefault(speaker_id, {})
+        language_counts[language] = language_counts.get(language, 0) + 1
+
+    return {
+        speaker_id: {
+            language: profiles[speaker_id][language]
+            for language in sorted(profiles[speaker_id])
+        }
+        for speaker_id in sorted(profiles)
+    }
+
 def parse_tidyvoice_audio_path(
     audio_path: str | Path,
     *,

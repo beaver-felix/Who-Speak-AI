@@ -7,6 +7,7 @@ import pytest
 from speaker_recognition.data.manifest import AudioStorage, Split
 from speaker_recognition.data.tidyvoice import (
     TidyVoicePathError,
+    collect_tidyvoice_speaker_language_counts,
     iter_tidyvoice_audio_paths,
     parse_tidyvoice_audio_path,
 )
@@ -222,3 +223,29 @@ def test_scan_rejects_unexpected_file_format(tmp_path: Path) -> None:
                 source_split="dev",
             )
         )
+
+def test_collect_speaker_language_counts(tmp_path: Path) -> None:
+    """Dev profiles should count languages without decoding waveforms."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    branch_root = dataset_root / "TidyVoiceX_Dev" / "TidyVoiceX_Dev"
+
+    relative_paths = (
+        Path("id000001/en/a.wav"),
+        Path("id000001/en/b.wav"),
+        Path("id000001/vi/c.wav"),
+        Path("id000002/vi/d.wav"),
+    )
+    for relative_path in relative_paths:
+        path = branch_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+    profiles = collect_tidyvoice_speaker_language_counts(
+        dataset_root,
+        source_split="dev",
+    )
+
+    assert profiles == {
+        "tidyvoice:id000001": {"en": 2, "vi": 1},
+        "tidyvoice:id000002": {"vi": 1},
+    }
