@@ -441,3 +441,21 @@ The new pipeline must address these limitations or document why a limitation rem
 - Pinned WavLM-Base+ strictly loaded into the required WavLM+MHFA architecture and passed real-speech GPU inference.
 - Initial feasibility and compatibility gates have passed for all three required model families.
 - No implementation or model code has been approved yet.
+
+## Accepted TidyVoice Dev Protocol — 2026-08-19
+
+- Source Dev is partitioned into 404 validation and 404 test speakers.
+- Speaker overlap is prohibited.
+- Selected configuration: seed 42, 64 greedy restarts, and 8 swap passes.
+- Validation/test utterances: 29,720 / 29,723.
+- Utterance imbalance: 0.005047%.
+- Maximum language-proportion difference: 2.230175 percentage points.
+- Objective value: 0.02235222.
+- Speaker-profile SHA-256:
+  `9e5c0b2502f732307a605e6ccdc7dda763cd1903badfea95ef7922bcb4800b9a`.
+- Assignment artifact:
+  `results/data_audit/tidyvoice_dev_protocol.json`.
+- Methodology decision:
+  `docs/decisions/001_tidyvoice_dev_protocol.md`.
+- This exact assignment must be shared by ECAPA-TDNN, RawNet3, and
+  WavLM+MHFA experiments.
