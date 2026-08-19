@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
+
+import pyarrow.parquet as pq
 
 from speaker_recognition.data.manifest import (
     AudioStorage,
@@ -29,6 +31,103 @@ _SOURCE_TO_CANONICAL_SPLIT = {
     "test": Split.TEST,
 }
 
+_VIMD_METADATA_COLUMNS = (
+    "region",
+    "province_name",
+    "filename",
+    "text",
+    "speakerID",
+    "gender",
+)
+
+def iter_vimd_source_records(
+    dataset_root: str | Path,
+    *,
+    source_split: str,
+    batch_size: int = 4096,
+) -> Iterator[ManifestRecord]:
+    """Stream one ViMD source partition without loading audio bytes.
+
+    Parameters
+    ----------
+    dataset_root:
+        ViMD root containing the ``data`` directory.
+    source_split:
+        Source partition: ``train``, ``valid``, or ``test``.
+    batch_size:
+        Maximum metadata rows decoded per Parquet batch.
+
+    Yields
+    ------
+    ManifestRecord
+        Canonical records in shard and row order. Excluded contaminated
+        Validation rows are omitted.
+
+    Raises
+    ------
+    ViMDMetadataError
+        If settings, shards, or required schema fields are invalid.
+    """
+    if source_split not in _SOURCE_TO_CANONICAL_SPLIT:
+        raise ViMDMetadataError(
+            f"Unsupported ViMD source split: {source_split!r}"
+        )
+    if (
+        isinstance(batch_size, bool)
+        or not isinstance(batch_size, int)
+        or batch_size <= 0
+    ):
+        raise ViMDMetadataError("batch_size must be a positive integer.")
+
+    root = Path(dataset_root).expanduser().resolve()
+    data_root = root / "data"
+    shard_paths = tuple(
+        sorted(
+            data_root.glob(f"{source_split}-*.parquet"),
+            key=lambda path: path.name,
+        )
+    )
+
+    if not shard_paths:
+        raise ViMDMetadataError(
+            f"No ViMD Parquet shards found for {source_split!r} "
+            f"under {data_root}."
+        )
+
+    required_columns = set(_VIMD_METADATA_COLUMNS)
+
+    for shard_path in shard_paths:
+        parquet_file = pq.ParquetFile(shard_path)
+        available_columns = set(parquet_file.schema_arrow.names)
+        missing_columns = sorted(required_columns - available_columns)
+
+        if missing_columns:
+            raise ViMDMetadataError(
+                f"ViMD shard {shard_path.name!r} is missing columns: "
+                f"{missing_columns}"
+            )
+
+        row_offset = 0
+
+        for batch in parquet_file.iter_batches(
+            batch_size=batch_size,
+            columns=list(_VIMD_METADATA_COLUMNS),
+            use_threads=False,
+        ):
+            for batch_index, row in enumerate(batch.to_pylist()):
+                record = parse_vimd_metadata_row(
+                    row,
+                    parquet_path=shard_path,
+                    row_index=row_offset + batch_index,
+                    dataset_root=root,
+                    source_split=source_split,
+                )
+                if record is not None:
+                    yield record
+
+            # This remains a shard-global row index even when batches align
+            # with different Parquet row groups.
+            row_offset += batch.num_rows
 
 def parse_vimd_metadata_row(
     row: Mapping[str, object],

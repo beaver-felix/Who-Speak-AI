@@ -3,11 +3,15 @@
 from pathlib import Path
 
 import pytest
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from speaker_recognition.data.manifest import AudioStorage, Split
 from speaker_recognition.data.vimd import (
     ViMDMetadataError,
     parse_vimd_metadata_row,
+    iter_vimd_source_records,
+
 )
 
 
@@ -141,4 +145,102 @@ def test_reject_parquet_path_outside_dataset_root(
             row_index=0,
             dataset_root=dataset_root,
             source_split="train",
+        )
+
+def write_vimd_shard(
+    path: Path,
+    rows: list[dict[str, object]],
+) -> None:
+    """Write a small metadata-only Parquet fixture with multiple row groups."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pylist(rows)
+    pq.write_table(table, path, row_group_size=1)
+
+
+def test_stream_source_records_and_preserve_global_row_indexes(
+    tmp_path: Path,
+) -> None:
+    """Streaming must preserve row positions while applying exclusions."""
+    dataset_root = tmp_path / "vimd-dataset"
+    shard_path = dataset_root / "data" / "valid-00000.parquet"
+
+    write_vimd_shard(
+        shard_path,
+        [
+            make_metadata_row(
+                speaker_id="spk_01_0001",
+                filename="01_0001.wav",
+            ),
+            make_metadata_row(
+                speaker_id="spk_73_0186",
+                filename="73_0309.wav",
+            ),
+            make_metadata_row(
+                speaker_id="spk_01_0002",
+                filename="01_0002.wav",
+            ),
+        ],
+    )
+
+    records = tuple(
+        iter_vimd_source_records(
+            dataset_root,
+            source_split="valid",
+            batch_size=2,
+        )
+    )
+
+    assert len(records) == 2
+    assert [record.audio_row_index for record in records] == [0, 2]
+    assert all(record.split is Split.VALIDATION for record in records)
+
+
+def test_stream_shards_in_deterministic_filename_order(
+    tmp_path: Path,
+) -> None:
+    """Manifest order must not depend on filesystem enumeration order."""
+    dataset_root = tmp_path / "vimd-dataset"
+
+    write_vimd_shard(
+        dataset_root / "data" / "train-00001.parquet",
+        [
+            make_metadata_row(
+                speaker_id="spk_01_0002",
+                filename="second.wav",
+            )
+        ],
+    )
+    write_vimd_shard(
+        dataset_root / "data" / "train-00000.parquet",
+        [
+            make_metadata_row(
+                speaker_id="spk_01_0001",
+                filename="first.wav",
+            )
+        ],
+    )
+
+    records = tuple(
+        iter_vimd_source_records(
+            dataset_root,
+            source_split="train",
+        )
+    )
+
+    assert [record.audio_path for record in records] == [
+        "data/train-00000.parquet",
+        "data/train-00001.parquet",
+    ]
+
+
+def test_stream_rejects_missing_source_shards(tmp_path: Path) -> None:
+    """A missing dataset mount must not become an empty experiment."""
+    dataset_root = tmp_path / "vimd-dataset"
+
+    with pytest.raises(ViMDMetadataError, match="No ViMD Parquet shards"):
+        tuple(
+            iter_vimd_source_records(
+                dataset_root,
+                source_split="test",
+            )
         )
