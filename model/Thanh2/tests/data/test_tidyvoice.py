@@ -7,6 +7,7 @@ import pytest
 from speaker_recognition.data.manifest import AudioStorage, Split
 from speaker_recognition.data.tidyvoice import (
     TidyVoicePathError,
+    iter_tidyvoice_audio_paths,
     parse_tidyvoice_audio_path,
 )
 
@@ -142,4 +143,82 @@ def test_reject_non_wav_file(tmp_path: Path) -> None:
             audio_path,
             dataset_root=dataset_root,
             split=Split.TEST,
+        )
+
+def test_scan_source_split_in_deterministic_order(tmp_path: Path) -> None:
+    """Scanning order must not depend on filesystem enumeration order."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    branch_root = dataset_root / "TidyVoiceX_Train" / "TidyVoiceX_Train"
+
+    relative_paths = (
+        Path("id000002/en/z.wav"),
+        Path("id000001/vi/b.wav"),
+        Path("id000001/en/c.wav"),
+        Path("id000001/en/a.wav"),
+    )
+    for relative_path in relative_paths:
+        path = branch_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+    discovered = tuple(
+        path.relative_to(branch_root).as_posix()
+        for path in iter_tidyvoice_audio_paths(
+            dataset_root,
+            source_split="train",
+        )
+    )
+
+    assert discovered == (
+        "id000001/en/a.wav",
+        "id000001/en/c.wav",
+        "id000001/vi/b.wav",
+        "id000002/en/z.wav",
+    )
+
+
+def test_scan_rejects_unknown_source_split(tmp_path: Path) -> None:
+    """Only source-provided train and dev branches are valid."""
+    with pytest.raises(TidyVoicePathError, match="source split"):
+        tuple(
+            iter_tidyvoice_audio_paths(
+                tmp_path,
+                source_split="validation",
+            )
+        )
+
+
+def test_scan_rejects_missing_branch_directory(tmp_path: Path) -> None:
+    """A missing mount should fail before producing an empty manifest."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+
+    with pytest.raises(TidyVoicePathError, match="does not exist"):
+        tuple(
+            iter_tidyvoice_audio_paths(
+                dataset_root,
+                source_split="dev",
+            )
+        )
+
+
+def test_scan_rejects_unexpected_file_format(tmp_path: Path) -> None:
+    """Unexpected files should be reported instead of silently omitted."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    language_root = (
+        dataset_root
+        / "TidyVoiceX_Dev"
+        / "TidyVoiceX_Dev"
+        / "id000001"
+        / "en"
+    )
+    language_root.mkdir(parents=True)
+    (language_root / "sample.wav").touch()
+    (language_root / "unexpected.txt").touch()
+
+    with pytest.raises(TidyVoicePathError, match="Unexpected file"):
+        tuple(
+            iter_tidyvoice_audio_paths(
+                dataset_root,
+                source_split="dev",
+            )
         )

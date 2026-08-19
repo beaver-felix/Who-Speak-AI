@@ -1,6 +1,7 @@
 """TidyVoice path parsing for the canonical speaker manifest."""
 
 from __future__ import annotations
+from collections.abc import Iterator
 
 from pathlib import Path
 
@@ -20,11 +21,91 @@ _BRANCH_TO_SOURCE_SPLIT = {
     ("TidyVoiceX_Dev", "TidyVoiceX_Dev"): "dev",
 }
 
+_SOURCE_SPLIT_TO_BRANCH = {
+    source_split: branch
+    for branch, source_split in _BRANCH_TO_SOURCE_SPLIT.items()
+}
+
 _ALLOWED_CANONICAL_SPLITS = {
     "train": frozenset({Split.TRAIN}),
     "dev": frozenset({Split.VALIDATION, Split.TEST}),
 }
 
+def iter_tidyvoice_audio_paths(
+    dataset_root: str | Path,
+    *,
+    source_split: str,
+) -> Iterator[Path]:
+    """Yield TidyVoice WAV paths in deterministic lexical order.
+
+    The function validates the documented speaker/language/file hierarchy but
+    does not decode audio. This keeps discovery inexpensive for more than
+    300,000 files.
+
+    Parameters
+    ----------
+    dataset_root:
+        Root containing the TidyVoice train and dev branches.
+    source_split:
+        Source partition name: ``train`` or ``dev``.
+
+    Yields
+    ------
+    pathlib.Path
+        Absolute WAV paths ordered by speaker, language, and filename.
+
+    Raises
+    ------
+    TidyVoicePathError
+        If the source split, branch, or nested file layout is invalid.
+    """
+    try:
+        branch = _SOURCE_SPLIT_TO_BRANCH[source_split]
+    except KeyError as error:
+        raise TidyVoicePathError(
+            f"Unsupported TidyVoice source split: {source_split!r}"
+        ) from error
+
+    branch_root = (
+        Path(dataset_root)
+        .expanduser()
+        .resolve()
+        .joinpath(*branch)
+    )
+    if not branch_root.is_dir():
+        raise TidyVoicePathError(
+            f"TidyVoice branch directory does not exist: {branch_root}"
+        )
+
+    for speaker_path in sorted(
+        branch_root.iterdir(),
+        key=lambda path: path.name,
+    ):
+        if not speaker_path.is_dir():
+            raise TidyVoicePathError(
+                f"Unexpected entry in speaker directory: {speaker_path}"
+            )
+
+        for language_path in sorted(
+            speaker_path.iterdir(),
+            key=lambda path: path.name,
+        ):
+            if not language_path.is_dir():
+                raise TidyVoicePathError(
+                    f"Unexpected entry in language directory: {language_path}"
+                )
+
+            for audio_path in sorted(
+                language_path.iterdir(),
+                key=lambda path: path.name,
+            ):
+                if not audio_path.is_file() or audio_path.suffix.lower() != ".wav":
+                    raise TidyVoicePathError(
+                        f"Unexpected file in TidyVoice audio directory: "
+                        f"{audio_path}"
+                    )
+
+                yield audio_path
 
 def parse_tidyvoice_audio_path(
     audio_path: str | Path,
