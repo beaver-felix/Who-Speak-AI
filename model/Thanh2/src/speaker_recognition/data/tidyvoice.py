@@ -1,7 +1,7 @@
 """TidyVoice path parsing for the canonical speaker manifest."""
 
 from __future__ import annotations
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 from pathlib import Path
 
@@ -150,6 +150,99 @@ def collect_tidyvoice_speaker_language_counts(
         }
         for speaker_id in sorted(profiles)
     }
+
+def iter_tidyvoice_manifest_records(
+    dataset_root: str | Path,
+    *,
+    dev_assignments: Mapping[str, Split],
+) -> Iterator[ManifestRecord]:
+    """Yield canonical Train, Validation, and Test manifest records.
+
+    Source Train speakers remain in canonical Train. Every source Dev speaker
+    must have one explicit Validation or Test assignment.
+
+    Parameters
+    ----------
+    dataset_root:
+        Root containing both TidyVoice source branches.
+    dev_assignments:
+        Dataset-scoped Dev speaker IDs mapped to canonical Validation or Test.
+
+    Yields
+    ------
+    ManifestRecord
+        Records ordered by source Train first and source Dev second, with
+        deterministic ordering inside each source branch.
+
+    Raises
+    ------
+    TidyVoicePathError
+        If assignments are missing, unexpected, or use an invalid split.
+    """
+    dev_profiles = collect_tidyvoice_speaker_language_counts(
+        dataset_root,
+        source_split="dev",
+    )
+    expected_speakers = set(dev_profiles)
+    assigned_speakers = set(dev_assignments)
+
+    missing_speakers = sorted(expected_speakers - assigned_speakers)
+    if missing_speakers:
+        raise TidyVoicePathError(
+            "Missing canonical assignments for TidyVoice Dev speakers: "
+            f"{_format_bounded_examples(missing_speakers)}"
+        )
+
+    unexpected_speakers = sorted(assigned_speakers - expected_speakers)
+    if unexpected_speakers:
+        raise TidyVoicePathError(
+            "Unexpected TidyVoice Dev speaker assignments: "
+            f"{_format_bounded_examples(unexpected_speakers)}"
+        )
+
+    invalid_assignments = sorted(
+        speaker_id
+        for speaker_id, split in dev_assignments.items()
+        if split not in {Split.VALIDATION, Split.TEST}
+    )
+    if invalid_assignments:
+        raise TidyVoicePathError(
+            "TidyVoice Dev assignments must use validation or test: "
+            f"{_format_bounded_examples(invalid_assignments)}"
+        )
+
+    for audio_path in iter_tidyvoice_audio_paths(
+        dataset_root,
+        source_split="train",
+    ):
+        yield parse_tidyvoice_audio_path(
+            audio_path,
+            dataset_root=dataset_root,
+            split=Split.TRAIN,
+        )
+
+    for audio_path in iter_tidyvoice_audio_paths(
+        dataset_root,
+        source_split="dev",
+    ):
+        speaker_id = f"tidyvoice:{audio_path.parent.parent.name}"
+        yield parse_tidyvoice_audio_path(
+            audio_path,
+            dataset_root=dataset_root,
+            split=dev_assignments[speaker_id],
+        )
+
+
+def _format_bounded_examples(
+    values: list[str],
+    *,
+    limit: int = 10,
+) -> str:
+    """Format a bounded diagnostic list without flooding terminal output."""
+    examples = values[:limit]
+    omitted = len(values) - len(examples)
+    suffix = "" if omitted == 0 else f" (+{omitted} more)"
+    return f"{examples}{suffix}"
 
 def parse_tidyvoice_audio_path(
     audio_path: str | Path,

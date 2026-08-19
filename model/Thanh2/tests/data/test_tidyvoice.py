@@ -4,12 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from speaker_recognition.data.manifest import AudioStorage, Split
+from speaker_recognition.data.manifest import (
+    AudioStorage,
+    Split,
+    validate_manifest,
+)
 from speaker_recognition.data.tidyvoice import (
     TidyVoicePathError,
     collect_tidyvoice_speaker_language_counts,
     iter_tidyvoice_audio_paths,
     parse_tidyvoice_audio_path,
+    iter_tidyvoice_manifest_records,
+
 )
 
 
@@ -249,3 +255,72 @@ def test_collect_speaker_language_counts(tmp_path: Path) -> None:
         "tidyvoice:id000001": {"en": 2, "vi": 1},
         "tidyvoice:id000002": {"vi": 1},
     }
+
+def test_build_canonical_records_from_split_assignments(
+    tmp_path: Path,
+) -> None:
+    """Train and Dev files should become one leakage-safe manifest."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    relative_files = (
+        (
+            "TidyVoiceX_Train",
+            "id000001/en/train.wav",
+        ),
+        (
+            "TidyVoiceX_Dev",
+            "id000002/en/validation.wav",
+        ),
+        (
+            "TidyVoiceX_Dev",
+            "id000003/vi/test.wav",
+        ),
+    )
+
+    for branch, relative_path in relative_files:
+        path = dataset_root / branch / branch / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+    records = tuple(
+        iter_tidyvoice_manifest_records(
+            dataset_root,
+            dev_assignments={
+                "tidyvoice:id000002": Split.VALIDATION,
+                "tidyvoice:id000003": Split.TEST,
+            },
+        )
+    )
+
+    validated = validate_manifest(records)
+
+    assert len(validated) == 3
+    assert [record.split for record in validated] == [
+        Split.TRAIN,
+        Split.VALIDATION,
+        Split.TEST,
+    ]
+
+
+def test_manifest_builder_rejects_missing_dev_assignment(
+    tmp_path: Path,
+) -> None:
+    """Every Dev speaker must receive an explicit canonical split."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    audio_path = (
+        dataset_root
+        / "TidyVoiceX_Dev"
+        / "TidyVoiceX_Dev"
+        / "id000002"
+        / "en"
+        / "sample.wav"
+    )
+    audio_path.parent.mkdir(parents=True)
+    audio_path.touch()
+
+    with pytest.raises(TidyVoicePathError, match="Missing"):
+        tuple(
+            iter_tidyvoice_manifest_records(
+                dataset_root,
+                dev_assignments={},
+            )
+        )
