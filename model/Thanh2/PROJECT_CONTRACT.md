@@ -501,3 +501,19 @@ The new pipeline must address these limitations or document why a limitation rem
   versions validated against the Kaggle runtime.
 - Canonical audio behavior, embedded decoding, and row-group cache reuse are
   covered by the 43-test regression suite.
+
+## Accepted Temporal Segmentation Invariants — 2026-08-20
+
+- Training uses fixed-length pseudo-random crops derived from SHA-256 of the
+  global seed, epoch, and canonical utterance ID; Python process hashes are
+  prohibited because they are not stable across runs.
+- Short recordings repeat their speech samples to reach the requested length;
+  shared preprocessing does not introduce dataset-specific silence padding.
+- Evaluation crops are deterministic, evenly span the available timeline, and
+  include both temporal endpoints.
+- A short evaluation recording produces one repeated crop rather than several
+  identical crops.
+- Segment duration and evaluation crop count remain explicit configuration
+  variables to be selected using Validation evidence only.
+- Segmentation and the complete data foundation are covered by 51 passing
+  regression tests.
