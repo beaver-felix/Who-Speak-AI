@@ -1,0 +1,42 @@
+{
+  "dataset": {
+    "canonical_utterances": 18947,
+    "id": "dullahn/vimd-dataset",
+    "manifest_sha256": "ed7b764c6aaab2ba2c4ec95edadab19fd640ebca72aa06da3d36cbf93fc4747f"
+  },
+  "methodology_notes": [
+    "Parquet audio bytes were not read during metadata validation.",
+    "The official source Test partition remains unchanged.",
+    "The two excluded Validation rows contribute no genuine pairs.",
+    "Gender is retained as metadata but is not a trusted target."
+  ],
+  "policy": {
+    "excluded_validation_speakers": [
+      "spk_73_0186",
+      "spk_76_0219"
+    ],
+    "excluded_validation_utterances": 2,
+    "reason": "Preserve source Test and remove Validation speaker overlap.",
+    "source_test": "canonical_test",
+    "source_train": "canonical_train",
+    "source_valid": "canonical_validation"
+  },
+  "schema_version": 1,
+  "split_statistics": {
+    "test": {
+      "genuine_pairs": 1046,
+      "speakers": 1344,
+      "utterances": 2026
+    },
+    "train": {
+      "genuine_pairs": 7044,
+      "speakers": 10291,
+      "utterances": 15023
+    },
+    "validation": {
+      "genuine_pairs": 879,
+      "speakers": 1318,
+      "utterances": 1898
+    }
+  }
+}

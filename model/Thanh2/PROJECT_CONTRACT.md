@@ -440,7 +440,9 @@ The new pipeline must address these limitations or document why a limitation rem
 - Official WavLM-Base+ initialization artifact downloaded, fingerprinted, and safely inspected.
 - Pinned WavLM-Base+ strictly loaded into the required WavLM+MHFA architecture and passed real-speech GPU inference.
 - Initial feasibility and compatibility gates have passed for all three required model families.
-- No implementation or model code has been approved yet.
+- The canonical manifest schema, integrity validation, deterministic
+  TidyVoice scanner/splitter, and lazy ViMD metadata pipeline are implemented
+  and covered by local unit tests.
 
 ## Accepted TidyVoice Dev Protocol — 2026-08-19
 
@@ -459,3 +461,22 @@ The new pipeline must address these limitations or document why a limitation rem
   `docs/decisions/001_tidyvoice_dev_protocol.md`.
 - This exact assignment must be shared by ECAPA-TDNN, RawNet3, and
   WavLM+MHFA experiments.
+
+## Accepted ViMD Canonical Protocol — 2026-08-20
+
+- Source Train maps to canonical Train unchanged.
+- Source Test maps to canonical Test unchanged.
+- Source Validation maps to canonical Validation after excluding
+  `spk_73_0186` and `spk_76_0219`.
+- Canonical counts are 15,023 Train, 1,898 Validation, and 2,026 Test
+  utterances.
+- Canonical speaker counts are 10,291 Train, 1,318 Validation, and 1,344 Test.
+- Genuine-pair capacities are 7,044 Train, 879 Validation, and 1,046 Test.
+- The exclusions remove speaker leakage without reducing genuine-pair capacity.
+- Canonical manifest SHA-256:
+  `ed7b764c6aaab2ba2c4ec95edadab19fd640ebca72aa06da3d36cbf93fc4747f`.
+- Evidence artifact:
+  `results/data_audit/vimd_protocol_summary.json`.
+- Methodology decision:
+  `docs/decisions/002_vimd_canonical_protocol.md`.
+- This protocol must be shared by all three model architectures.
