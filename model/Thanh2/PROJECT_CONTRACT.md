@@ -531,3 +531,20 @@ The new pipeline must address these limitations or document why a limitation rem
 - Evidence artifact: `results/data_audit/audio_pipeline_smoke.json`.
 - Methodology decision:
   `docs/decisions/003_canonical_audio_preprocessing.md`.
+
+## Accepted Verification Metric Definitions — 2026-08-20
+
+- Genuine trials are labeled `1`, impostor trials are labeled `0`, and larger
+  scores indicate greater similarity.
+- Acceptance uses `score >= threshold`; tied scores enter ROC points atomically.
+- EER is linearly interpolated around the empirical FAR/FRR crossing.
+- The deployed decision threshold is selected using Validation only, frozen,
+  and then used for Test FAR, FRR, TAR, and accuracy.
+- Test scores must never retune the deployed threshold.
+- Default normalized minDCF uses `P_target=0.01`, `C_miss=1`, and
+  `C_false_alarm=1`.
+- TAR is reported at FAR 5%, 1%, 0.1%, and 0.01%, together with achieved FAR
+  and threshold because finite trial lists limit empirical FAR resolution.
+- Shared metrics are implemented without model-specific code paths and covered
+  by the 62-test regression suite.
+- Methodology decision: `docs/decisions/004_verification_metrics.md`.
