@@ -480,3 +480,24 @@ The new pipeline must address these limitations or document why a limitation rem
 - Methodology decision:
   `docs/decisions/002_vimd_canonical_protocol.md`.
 - This protocol must be shared by all three model architectures.
+
+## Accepted Canonical Audio Preprocessing — 2026-08-20
+
+- All three model families receive mono `float32` waveform audio at 16 kHz.
+- Multichannel sources are downmixed using the arithmetic channel mean.
+- Non-16-kHz sources are converted with polyphase anti-aliasing resampling.
+- Resampled signals are adjusted to the nearest duration-preserving sample
+  count to prevent source-rate-dependent one-sample inconsistencies.
+- Natural waveform amplitude is preserved; shared preprocessing does not apply
+  peak, RMS, or loudness normalization.
+- Empty, non-finite, malformed, or invalid-rate signals fail before modeling.
+- Source sample rate and channel count remain available for audit reporting.
+- ViMD audio remains embedded in Parquet; a worker-local one-row-group cache
+  prevents repeated physical reads for nearby records without extracting the
+  approximately 56 GiB source dataset.
+- TidyVoice standalone WAV files and ViMD embedded WAV bytes converge on the
+  same canonical waveform representation.
+- NumPy `2.0.x`, SciPy `1.16.x`, and SoundFile `0.13.x` are bounded to the
+  versions validated against the Kaggle runtime.
+- Canonical audio behavior, embedded decoding, and row-group cache reuse are
+  covered by the 43-test regression suite.

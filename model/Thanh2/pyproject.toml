@@ -13,7 +13,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<10"]
 data = [
+    "numpy>=2.0,<2.1",
     "pyarrow>=24.0,<25.0",
+    "scipy>=1.16,<1.17",
     "soundfile>=0.13,<0.14",
 ]
 
