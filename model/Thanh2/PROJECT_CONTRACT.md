@@ -22,8 +22,12 @@ If documents conflict, explicit current user instructions take precedence. The a
 
 - Use Git branch `thanhDT`.
 - Create or edit project artifacts only inside `Who-Speak-AI/model/Thanh2` unless the user explicitly expands the scope.
-- Guide and execute only one current step at a time. Review its result before starting the next step.
-- Do not create or modify files unless the user explicitly requests it.
+- Work in small, reviewable batches; when the user must perform actions, up to
+  three closely related tasks may be grouped to improve speed.
+- The assistant may create, modify, test, commit, and push project files
+  without requesting permission each time. The user remains responsible for
+  Kaggle execution, downloading Kaggle outputs, and other actions unavailable
+  to the assistant.
 - Never invent dataset properties, API behavior, experimental results, citations, or model capabilities.
 - Keep code, configuration, documentation, reports, and other deliverables in English.
 - Document why every important decision was made, not only what was done.
@@ -548,3 +552,21 @@ The new pipeline must address these limitations or document why a limitation rem
 - Shared metrics are implemented without model-specific code paths and covered
   by the 62-test regression suite.
 - Methodology decision: `docs/decisions/004_verification_metrics.md`.
+
+## Verification Trial Protocol Implementation — 2026-08-20
+
+- Deterministic genuine and impostor trial construction is implemented for
+  canonical Validation and Test partitions.
+- Genuine trials are capped per speaker; impostor generation samples speaker
+  identities uniformly before sampling utterances.
+- The proposed fixed settings are seed 42, at most 20 genuine pairs per
+  speaker, and 100,000 unique impostor pairs per dataset/split.
+- One hundred thousand impostor trials provide an empirical FAR resolution of
+  0.001 percentage points, supporting analysis at the required FAR 0.01%
+  target with ten false-accept increments at that target.
+- Trial lists receive deterministic SHA-256 fingerprints and are shared by all
+  three models.
+- The complete local regression suite contains 68 passing tests.
+- The real-data protocol artifact and its four final fingerprints remain
+  pending Kaggle execution; the settings are not considered fully accepted
+  until that evidence is reviewed.
