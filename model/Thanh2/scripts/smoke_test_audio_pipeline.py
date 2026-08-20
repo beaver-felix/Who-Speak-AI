@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 import numpy as np
 
@@ -43,6 +45,11 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=16000,
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional destination for a machine-readable JSON summary.",
+    )
     return parser.parse_args()
 
 
@@ -70,6 +77,36 @@ def print_audio_summary(
     print(f"finite: {bool(np.isfinite(audio.waveform).all())}")
     print(f"waveform SHA-256: {waveform_sha256(audio)}")
     print(f"load seconds: {elapsed_seconds:.6f}")
+
+
+def audio_summary(
+    audio: CanonicalAudio,
+    *,
+    source: str,
+    elapsed_seconds: float,
+) -> dict[str, Any]:
+    """Build a JSON-serializable summary for one canonical waveform."""
+    return {
+        "source": source,
+        "original_sample_rate": audio.original_sample_rate,
+        "original_channels": audio.original_channels,
+        "canonical_sample_rate": audio.sample_rate,
+        "canonical_samples": int(audio.waveform.size),
+        "duration_seconds": audio.duration_seconds,
+        "finite": bool(np.isfinite(audio.waveform).all()),
+        "waveform_sha256": waveform_sha256(audio),
+        "load_seconds": elapsed_seconds,
+    }
+
+
+def write_json(payload: dict[str, Any], output_path: Path) -> None:
+    """Write a stable UTF-8 smoke-test artifact."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> None:
@@ -135,6 +172,36 @@ def main() -> None:
         raise RuntimeError("TidyVoice canonical sample rate is incorrect.")
     if vimd_audio.sample_rate != arguments.target_sample_rate:
         raise RuntimeError("ViMD canonical sample rate is incorrect.")
+
+    if arguments.output is not None:
+        payload: dict[str, Any] = {
+            "schema_version": 1,
+            "target_sample_rate": arguments.target_sample_rate,
+            "tidyvoice": audio_summary(
+                tidyvoice_audio,
+                source=tidyvoice_path.relative_to(
+                    arguments.tidyvoice_root
+                ).as_posix(),
+                elapsed_seconds=tidyvoice_elapsed,
+            ),
+            "vimd": {
+                **audio_summary(
+                    vimd_audio,
+                    source=(
+                        f"{vimd_record.audio_path}#"
+                        f"row={vimd_record.audio_row_index}"
+                    ),
+                    elapsed_seconds=vimd_elapsed,
+                ),
+                "row_group_reads_after_two_loads": (
+                    parquet_reader.row_group_reads
+                ),
+                "repeat_waveform_equal": True,
+            },
+            "status": "passed",
+        }
+        write_json(payload, arguments.output)
+        print(f"artifact: {arguments.output.resolve()}")
 
     print("\nREAL DATASET AUDIO PIPELINE SMOKE TEST PASSED")
 

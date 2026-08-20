@@ -517,3 +517,17 @@ The new pipeline must address these limitations or document why a limitation rem
   variables to be selected using Validation evidence only.
 - Segmentation and the complete data foundation are covered by 51 passing
   regression tests.
+
+## Real-Dataset Audio Evidence — 2026-08-20
+
+- TidyVoice real-audio loading passed for mono 16 kHz input and produced a
+  finite 122,496-sample canonical waveform.
+- ViMD real-audio loading passed for stereo 44.1 kHz embedded input and
+  produced a finite 147,824-sample mono 16 kHz waveform.
+- Loading the same ViMD row twice caused exactly one physical Parquet row-group
+  read and reproduced identical canonical samples.
+- The observed 4.410327-second initial ViMD load is a smoke-test diagnostic,
+  not a final latency result; shard-aware access is required during training.
+- Evidence artifact: `results/data_audit/audio_pipeline_smoke.json`.
+- Methodology decision:
+  `docs/decisions/003_canonical_audio_preprocessing.md`.
