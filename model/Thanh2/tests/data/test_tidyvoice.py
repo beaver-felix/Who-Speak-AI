@@ -13,9 +13,9 @@ from speaker_recognition.data.tidyvoice import (
     TidyVoicePathError,
     collect_tidyvoice_speaker_language_counts,
     iter_tidyvoice_audio_paths,
-    parse_tidyvoice_audio_path,
+    iter_tidyvoice_dev_records,
     iter_tidyvoice_manifest_records,
-
+    parse_tidyvoice_audio_path,
 )
 
 
@@ -324,3 +324,32 @@ def test_manifest_builder_rejects_missing_dev_assignment(
                 dev_assignments={},
             )
         )
+
+
+def test_dev_record_builder_does_not_require_train_branch(
+    tmp_path: Path,
+) -> None:
+    """Evaluation preparation should scan Dev without touching Train."""
+    dataset_root = tmp_path / "TidyVoiceX_ASV"
+    audio_path = (
+        dataset_root
+        / "TidyVoiceX_Dev"
+        / "TidyVoiceX_Dev"
+        / "id000002"
+        / "en"
+        / "sample.wav"
+    )
+    audio_path.parent.mkdir(parents=True)
+    audio_path.touch()
+
+    records = tuple(
+        iter_tidyvoice_dev_records(
+            dataset_root,
+            dev_assignments={
+                "tidyvoice:id000002": Split.VALIDATION,
+            },
+        )
+    )
+
+    assert len(records) == 1
+    assert records[0].split is Split.VALIDATION

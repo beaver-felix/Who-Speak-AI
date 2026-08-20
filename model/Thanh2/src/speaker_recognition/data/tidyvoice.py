@@ -1,8 +1,8 @@
 """TidyVoice path parsing for the canonical speaker manifest."""
 
 from __future__ import annotations
-from collections.abc import Iterator, Mapping
 
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 from speaker_recognition.data.manifest import (
@@ -30,6 +30,7 @@ _ALLOWED_CANONICAL_SPLITS = {
     "train": frozenset({Split.TRAIN}),
     "dev": frozenset({Split.VALIDATION, Split.TEST}),
 }
+
 
 def iter_tidyvoice_audio_paths(
     dataset_root: str | Path,
@@ -107,6 +108,7 @@ def iter_tidyvoice_audio_paths(
 
                 yield audio_path
 
+
 def collect_tidyvoice_speaker_language_counts(
     dataset_root: str | Path,
     *,
@@ -151,6 +153,7 @@ def collect_tidyvoice_speaker_language_counts(
         for speaker_id in sorted(profiles)
     }
 
+
 def iter_tidyvoice_manifest_records(
     dataset_root: str | Path,
     *,
@@ -179,6 +182,46 @@ def iter_tidyvoice_manifest_records(
     TidyVoicePathError
         If assignments are missing, unexpected, or use an invalid split.
     """
+    _validate_tidyvoice_dev_assignments(dataset_root, dev_assignments)
+
+    for audio_path in iter_tidyvoice_audio_paths(
+        dataset_root,
+        source_split="train",
+    ):
+        yield parse_tidyvoice_audio_path(
+            audio_path,
+            dataset_root=dataset_root,
+            split=Split.TRAIN,
+        )
+
+    yield from _iter_tidyvoice_dev_records_unchecked(
+        dataset_root,
+        dev_assignments=dev_assignments,
+    )
+
+
+def iter_tidyvoice_dev_records(
+    dataset_root: str | Path,
+    *,
+    dev_assignments: Mapping[str, Split],
+) -> Iterator[ManifestRecord]:
+    """Yield only canonical Validation/Test records from source Dev.
+
+    This avoids scanning the much larger source Train branch when preparing
+    verification trials or evaluation-only artifacts.
+    """
+    _validate_tidyvoice_dev_assignments(dataset_root, dev_assignments)
+    yield from _iter_tidyvoice_dev_records_unchecked(
+        dataset_root,
+        dev_assignments=dev_assignments,
+    )
+
+
+def _validate_tidyvoice_dev_assignments(
+    dataset_root: str | Path,
+    dev_assignments: Mapping[str, Split],
+) -> None:
+    """Require an exact valid assignment for every source-Dev speaker."""
     dev_profiles = collect_tidyvoice_speaker_language_counts(
         dataset_root,
         source_split="dev",
@@ -211,16 +254,13 @@ def iter_tidyvoice_manifest_records(
             f"{_format_bounded_examples(invalid_assignments)}"
         )
 
-    for audio_path in iter_tidyvoice_audio_paths(
-        dataset_root,
-        source_split="train",
-    ):
-        yield parse_tidyvoice_audio_path(
-            audio_path,
-            dataset_root=dataset_root,
-            split=Split.TRAIN,
-        )
 
+def _iter_tidyvoice_dev_records_unchecked(
+    dataset_root: str | Path,
+    *,
+    dev_assignments: Mapping[str, Split],
+) -> Iterator[ManifestRecord]:
+    """Yield source-Dev records after assignment validation."""
     for audio_path in iter_tidyvoice_audio_paths(
         dataset_root,
         source_split="dev",
@@ -243,6 +283,7 @@ def _format_bounded_examples(
     omitted = len(values) - len(examples)
     suffix = "" if omitted == 0 else f" (+{omitted} more)"
     return f"{examples}{suffix}"
+
 
 def parse_tidyvoice_audio_path(
     audio_path: str | Path,
