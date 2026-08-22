@@ -632,7 +632,7 @@ The new pipeline must address these limitations or document why a limitation rem
 - Accepted methodology record:
   `docs/decisions/007_ecapa_adapter_implementation.md`.
 
-## Pending RawNet3 Adapter Gate — 2026-08-22
+## Accepted RawNet3 Adapter — 2026-08-22
 
 - Checkpoint source is pinned to `jungjee/RawNet3` revision
   `c89102eea20c3f96917c434de673c0ace0caddc0`.
@@ -656,8 +656,15 @@ The new pipeline must address these limitations or document why a limitation rem
   distinct training-crop endpoints so pooled BatchNorm does not cancel the
   symmetric input gradient. These settings do not yet select the final
   comparison configuration.
-- Status remains pending until real TidyVoice inference, deterministic repeat,
-  parameter count, checkpoint identity, and input/encoder gradient checks pass
-  on the Kaggle T4 and the JSON artifact is reviewed.
-- Methodology record:
+- The Kaggle T4 gate passed with PyTorch `2.10.0+cu128`, CUDA `12.8`, and
+  Asteroid Filterbanks `0.4.0`.
+- Real TidyVoice inference passed with shape `[1, 256]`, L2 norm 1.0, repeat
+  cosine similarity 1.0, and finite non-zero input and encoder gradients.
+- All ten structured acceptance checks passed.
+- Evidence artifact: `results/model_audit/rawnet3_adapter_smoke.json`.
+- Artifact SHA-256:
+  `37e5ff5ec506f3fcc185e82465823f2fa9325246d5c20eb76bdeb0957ee8411d`.
+- This is compatibility and trainability evidence, not TidyVoice or ViMD
+  benchmark performance.
+- Accepted methodology record:
   `docs/decisions/008_rawnet3_adapter_implementation.md`.

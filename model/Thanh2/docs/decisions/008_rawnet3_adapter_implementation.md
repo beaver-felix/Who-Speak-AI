@@ -1,6 +1,6 @@
 # Decision 008: RawNet3 Adapter Implementation
 
-Status: Pending Kaggle GPU acceptance
+Status: Accepted
 Date: 2026-08-22
 
 ## Context
@@ -93,10 +93,49 @@ TidyVoice recording and require:
 - at least one encoder parameter gradient is present, finite, and non-zero
 - structured JSON evidence is saved and reviewed
 
-Until this gate passes, the adapter is implemented but not accepted.
 The local regression suite contains 101 passing tests, including five
 dependency-free RawNet3 syntax, architecture-surface, license, provenance, and
-checkpoint-identity checks. Concrete PyTorch behavior remains a Kaggle gate.
+checkpoint-identity checks.
+
+## Kaggle GPU Evidence
+
+The acceptance gate passed on `cuda:0` with:
+
+- GPU class: Tesla T4
+- PyTorch: `2.10.0+cu128`
+- CUDA build: `12.8`
+- Asteroid Filterbanks: `0.4.0`
+- Checkpoint revision:
+  `c89102eea20c3f96917c434de673c0ace0caddc0`
+- Architecture revision:
+  `f51bab870672a9b0b50fa158b4e30f329e7866d7`
+- Checkpoint SHA-256:
+  `1ab283bcdf776bfceceea18240e56a8756835b1911b04f9c44f347d47c09f90c`
+- Adapter parameters: 16,280,322
+- Trainable adapter parameters: 16,280,322
+- Real TidyVoice sample: 122,496 samples, 7.656 seconds
+- Evaluation crop: 64,240 samples
+- Gradient crops: two distinct 48,240-sample endpoints
+- Output shape: `[1, 256]`
+- Output L2 norm: 1.0
+- Repeat cosine similarity: 1.0
+- Checkpoint identity, embedding shape, finiteness, and normalization: passed
+- Input gradient finite and non-zero: passed
+- Encoder gradient present, finite, and non-zero: passed
+
+Canonical waveform SHA-256:
+`9d608813bc66beb3d0b0bf72b23e7776abbf7121337c4b3beb737da5a627ac92`
+
+Evidence artifact:
+`results/model_audit/rawnet3_adapter_smoke.json`
+
+Artifact SHA-256:
+`37e5ff5ec506f3fcc185e82465823f2fa9325246d5c20eb76bdeb0957ee8411d`
+
+This establishes pinned-source loading, adapter shape compatibility,
+deterministic inference, and fine-tuning gradient flow. It does not establish
+TidyVoice or ViMD verification accuracy and must not be reported as a
+benchmark result.
 
 ## Advantages
 
