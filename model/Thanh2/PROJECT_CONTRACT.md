@@ -758,7 +758,7 @@ The new pipeline must address these limitations or document why a limitation rem
     `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The dependency-free local regression suite contains 144 passing tests.
+- The current local regression suite contains 161 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
 
@@ -797,3 +797,27 @@ The new pipeline must address these limitations or document why a limitation rem
 - Accepted batch status is `multibatch_validated_ready_for_epoch_training`.
 - Protocol decision:
   `docs/decisions/011_real_multibatch_training_gate.md`.
+
+## Restart-Safe Epoch Training Lifecycle — 2026-08-22
+
+- Training order is a deterministic seed-and-epoch shuffle that keeps every
+  utterance, including the final partial batch, exactly once per epoch.
+- A mid-epoch cursor records the exact next batch, global optimizer step, and
+  weighted metric accumulators. Dataset crops remain deterministic by seed,
+  epoch, and utterance identity.
+- Persistent workers remain disabled. A private DataLoader RNG prevents worker
+  initialization from perturbing model dropout or WavLM layerdrop state.
+- Atomic checkpoints contain adapter, target head, optimizer, GradScaler,
+  cursor, completed Validation history, and Python/torch/CUDA RNG state.
+- Resume uses `weights_only=True` and fails unless model, dataset, resolved
+  configuration SHA-256, manifest SHA-256, seed, and optimizer groups match.
+- Best-model selection uses Validation EER first and Validation minDCF as its
+  tie-breaker. Test data and Test thresholds are excluded from the engine.
+- Local JSONL logging is always available. W&B uses an explicit run ID and
+  strict resume semantics so Kaggle restarts do not create duplicate runs.
+- Early-stopping constants, epoch budget, scheduler, augmentation, and
+  validation-crop settings remain pending predeclared screening experiments.
+- The local suite contains 161 passing tests. A real Kaggle CUDA checkpoint
+  interruption/resume equivalence gate is still required before epoch runs.
+- Methodology decision:
+  `docs/decisions/012_restart_safe_epoch_training_lifecycle.md`.

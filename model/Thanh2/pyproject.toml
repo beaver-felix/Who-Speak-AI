@@ -30,6 +30,7 @@ wavlm_mhfa = [
     "gdown>=5.2,<5.3",
     "huggingface-hub>=1.11,<1.12",
 ]
+tracking = ["wandb==0.26.1"]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
