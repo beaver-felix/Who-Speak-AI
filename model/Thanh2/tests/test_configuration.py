@@ -47,6 +47,11 @@ def test_repository_layers_resolve_all_six_experiments(
     assert resolved.get("optimization.selection_status").endswith(
         "pending_validation"
     )
+    expected_batch_size = 6 if model_name == "wavlm_mhfa" else 24
+    assert resolved.get("training.batch.size") == expected_batch_size
+    assert resolved.get("training.batch.selection_status") == (
+        "memory_calibrated_pending_multibatch_validation"
+    )
     assert len(resolved.source_paths) == 3
     assert len(resolved.sha256) == 64
 
@@ -205,6 +210,11 @@ encoder_learning_rate = 0.0001
 head_learning_rate = 0.0001
 weight_decay = 0.000002
 selection_status = "fixture_pending_validation"
+[training.batch]
+size = 8
+calibrated_largest_passing_size = 10
+selection_status = "memory_calibrated_pending_multibatch_validation"
+calibration_artifact = "fixture.json"
 """.strip()
         + "\n",
         encoding="utf-8",

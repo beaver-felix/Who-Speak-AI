@@ -2,6 +2,7 @@
 
 from speaker_recognition.training.specification import (
     AamSoftmaxSpec,
+    BatchSpec,
     OptimizationSpec,
     TrainingSpecification,
     TrainingSpecificationError,
@@ -9,6 +10,7 @@ from speaker_recognition.training.specification import (
 
 __all__ = [
     "AamSoftmaxSpec",
+    "BatchSpec",
     "OptimizationSpec",
     "TrainingSpecification",
     "TrainingSpecificationError",

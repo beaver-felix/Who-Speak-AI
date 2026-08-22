@@ -40,6 +40,41 @@ class AamSoftmaxSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class BatchSpec:
+    """Describe a memory-calibrated batch candidate and its evidence path."""
+
+    size: int
+    calibrated_largest_passing_size: int
+    selection_status: str
+    calibration_artifact: str
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, Any]) -> "BatchSpec":
+        """Validate a conservative candidate selected from a passing grid."""
+        size = _positive_integer(values, "size")
+        largest = _positive_integer(values, "calibrated_largest_passing_size")
+        if size > largest:
+            raise TrainingSpecificationError(
+                "Batch size cannot exceed its calibrated passing maximum."
+            )
+        status = _non_empty_text(values, "selection_status")
+        if status != "memory_calibrated_pending_multibatch_validation":
+            raise TrainingSpecificationError(
+                "Batch selection status must remain pending multi-batch "
+                "validation."
+            )
+        return cls(
+            size=size,
+            calibrated_largest_passing_size=largest,
+            selection_status=status,
+            calibration_artifact=_non_empty_text(
+                values,
+                "calibration_artifact",
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class OptimizationSpec:
     """Describe one model's optimizer groups and candidate learning rates."""
 
@@ -125,6 +160,7 @@ class TrainingSpecification:
     """Join the shared loss contract to one architecture update policy."""
 
     objective: AamSoftmaxSpec
+    batch: BatchSpec
     optimization: OptimizationSpec
     mixed_precision: str
     gradient_clip_norm: float
@@ -148,6 +184,7 @@ class TrainingSpecification:
             objective=AamSoftmaxSpec.from_mapping(
                 _mapping(training, "objective")
             ),
+            batch=BatchSpec.from_mapping(_mapping(training, "batch")),
             optimization=OptimizationSpec.from_mapping(
                 model_name,
                 optimization,
@@ -201,3 +238,11 @@ def _numeric(values: Mapping[str, Any], key: str) -> float:
     if not (-float("inf") < normalized < float("inf")):
         raise TrainingSpecificationError(f"{key} must be finite.")
     return normalized
+
+
+def _positive_integer(values: Mapping[str, Any], key: str) -> int:
+    """Read one strict integer greater than zero."""
+    value = values.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise TrainingSpecificationError(f"{key} must be a positive integer.")
+    return value

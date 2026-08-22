@@ -26,3 +26,9 @@ encoder_learning_rate = 0.0001
 head_learning_rate = 0.0001
 weight_decay = 0.00005
 selection_status = "pretrained_finetuning_hypothesis_pending_validation"
+
+[training.batch]
+size = 24
+calibrated_largest_passing_size = 32
+selection_status = "memory_calibrated_pending_multibatch_validation"
+calibration_artifact = "results/model_audit/training_memory/rawnet3_vimd_classes_t4.json"

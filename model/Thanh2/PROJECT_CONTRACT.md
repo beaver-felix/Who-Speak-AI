@@ -742,9 +742,21 @@ The new pipeline must address these limitations or document why a limitation rem
 - Preliminary schema-1 memory evidence was rejected because it contained
   non-finite gradient norms and did not prove that GradScaler applied an
   optimizer update. Only schema-2 artifacts may be accepted.
+- Corrected schema-2 evidence passed every tested size on the first attempt
+  with finite loss, finite gradients, and a verified target-head update.
+- Corrected archive SHA-256:
+  `da0499d164e5940d50c506518407d75270e52b5c22c06515a62136600b535fc4`.
+- Memory-calibrated candidates pending distinct multi-batch validation are:
+  ECAPA-TDNN batch `24`, RawNet3 batch `24`, and WavLM+MHFA batch `6`.
+- Accepted evidence artifacts and SHA-256 values:
+  - `results/model_audit/training_memory/ecapa_tdnn_vimd_classes_t4.json`:
+    `e2b651670cb509954f0706345ec2801d61006a76ab8867033fbb495752d30397`;
+  - `results/model_audit/training_memory/rawnet3_vimd_classes_t4.json`:
+    `afe8df72a95acdd5d05441a29d8d25ca22879c2b29e924423a10edbfca86113d`;
+  - `results/model_audit/training_memory/wavlm_mhfa_vimd_classes_t4.json`:
+    `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The dependency-free local regression suite contains 129 passing tests; the
-  concrete objective/optimizer/memory gate still requires Kaggle T4 evidence.
+- The dependency-free local regression suite contains 132 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.

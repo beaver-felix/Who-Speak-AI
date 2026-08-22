@@ -41,6 +41,16 @@ def _resolved_values(model_name: str = "ecapa_tdnn") -> dict[str, object]:
         "training": {
             "mixed_precision": "fp16",
             "gradient_clip_norm": 5.0,
+            "batch": {
+                "size": 6 if model_name == "wavlm_mhfa" else 24,
+                "calibrated_largest_passing_size": (
+                    8 if model_name == "wavlm_mhfa" else 32
+                ),
+                "selection_status": (
+                    "memory_calibrated_pending_multibatch_validation"
+                ),
+                "calibration_artifact": "fixture.json",
+            },
             "objective": {
                 "name": "aam_softmax",
                 "margin": 0.2,
@@ -65,6 +75,8 @@ def test_shared_aam_softmax_spec_is_parsed_exactly() -> None:
     )
     assert specification.mixed_precision == "fp16"
     assert specification.gradient_clip_norm == pytest.approx(5.0)
+    assert specification.batch.size == 24
+    assert specification.batch.calibrated_largest_passing_size == 32
 
 
 def test_ecapa_and_rawnet_use_complete_encoder_policy() -> None:

@@ -1,7 +1,7 @@
 # Decision 010: Shared AAM-Softmax and Model-Specific Update Policies
 
 Date: 2026-08-22
-Status: objective contract accepted; optimizer values are screening candidates
+Status: objective and memory candidates accepted; effectiveness pending
 
 ## Question
 
@@ -117,6 +117,32 @@ norm, and verifying an exact target-head parameter change. A standalone
 dependency-free validator rejects old schemas and all non-finite or skipped
 steps. The rejected archive remains locally recoverable but is not accepted
 experiment evidence and is not committed.
+
+## Accepted Schema-2 Calibration
+
+The corrected archive SHA-256 is
+`da0499d164e5940d50c506518407d75270e52b5c22c06515a62136600b535fc4`.
+Every tested size passed on a Tesla T4 using PyTorch `2.10.0+cu128`, CUDA
+`12.8`, FP16, the ViMD worst-case `10,291`-class head, and dynamic scale
+`1024`. Every size passed on its first attempt with finite loss, finite
+pre-clipping gradient norm, and a proven target-head update.
+
+| Model | Passing sizes | Largest | Next candidate | Candidate peak | Artifact SHA-256 |
+|---|---|---:|---:|---:|---|
+| ECAPA-TDNN | 4, 8, 16, 24, 32 | 32 | 24 | 1.990 GiB | `e2b651670cb509954f0706345ec2801d61006a76ab8867033fbb495752d30397` |
+| RawNet3 | 4, 8, 16, 24, 32 | 32 | 24 | 3.760 GiB | `afe8df72a95acdd5d05441a29d8d25ca22879c2b29e924423a10edbfca86113d` |
+| WavLM+MHFA | 1, 2, 4, 6, 8 | 8 | 6 | 1.867 GiB | `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b` |
+
+For ECAPA and RawNet3, batch 24 is the largest tested value below the 80%
+boundary. For WavLM+MHFA, 80% of 8 is 6.4, so tested batch 6 is selected.
+These are memory candidates, not final training settings. A real multi-record,
+multi-batch mini-run remains mandatory.
+
+The evidence configurations exactly reproduced these pre-selection hashes:
+
+- ECAPA-TDNN: `91a50f6d2e688e8956e95ad9cc3e9db6a7ff9e69bce7333b935f405d6f6aed1d`
+- RawNet3: `a58e1b175f1bbc3dea7a65986fa62ebd2daeadb4ae6ac940279a7de1537e23b6`
+- WavLM+MHFA: `cda92164886e331d319cfafaed1ea15c0d69359997877b4301d75ab09fa39117`
 
 ## Advantages
 

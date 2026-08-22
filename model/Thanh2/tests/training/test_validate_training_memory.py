@@ -13,6 +13,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validate_training_memory.py"
+EVIDENCE_ROOT = PROJECT_ROOT / "results" / "model_audit" / "training_memory"
 
 
 def _load_validator() -> ModuleType:
@@ -108,3 +109,27 @@ def test_reject_old_capacity_only_schema(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="schema_version"):
         _load_validator().validate_artifact(_write(tmp_path, payload))
+
+
+@pytest.mark.parametrize(
+    ("filename", "model", "largest", "candidate"),
+    [
+        ("ecapa_tdnn_vimd_classes_t4.json", "ecapa_tdnn", 32, 25),
+        ("rawnet3_vimd_classes_t4.json", "rawnet3", 32, 25),
+        ("wavlm_mhfa_vimd_classes_t4.json", "wavlm_mhfa", 8, 6),
+    ],
+)
+def test_committed_schema2_evidence_passes_strict_validation(
+    filename: str,
+    model: str,
+    largest: int,
+    candidate: int,
+) -> None:
+    """Accepted real T4 artifacts must remain tied to the strict validator."""
+    summary = _load_validator().validate_artifact(EVIDENCE_ROOT / filename)
+
+    assert summary == {
+        "model": model,
+        "largest_passing_batch_size": largest,
+        "conservative_candidate_batch_size": candidate,
+    }
