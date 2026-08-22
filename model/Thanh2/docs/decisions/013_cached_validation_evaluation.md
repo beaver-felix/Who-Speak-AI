@@ -54,12 +54,14 @@ Each Validation artifact contains:
 5. extraction wall/model timing and derived throughput; and
 6. canonical split, epoch, segment duration, and segment count.
 
-The local regression suite contains 186 passing tests. It validates numerical
+The local regression suite contains 193 passing tests. It validates numerical
 aggregation, cache integrity, cosine scoring, trial fingerprints, complete
 metrics, threshold provenance, strict serialization, Validation-only source
 boundaries, deterministic extraction settings, and the CUDA-event latency
 protocol. A real T4 execution is still required before this runtime is marked
-fully accepted.
+fully accepted. The bounded gate and its dependency-free evidence validator are
+implemented by `scripts/smoke_test_evaluation_runtime.py` and
+`scripts/validate_evaluation_runtime.py` respectively.
 
 ## Advantages
 

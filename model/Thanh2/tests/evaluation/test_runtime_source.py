@@ -11,12 +11,14 @@ RUNTIME_PATH = (
 VALIDATION_PATH = (
     PROJECT_ROOT / "src/speaker_recognition/evaluation/validation.py"
 )
+SMOKE_PATH = PROJECT_ROOT / "scripts/smoke_test_evaluation_runtime.py"
 
 
 def test_kaggle_evaluation_modules_are_valid_python() -> None:
     """Both CUDA-only modules must remain syntactically importable on Kaggle."""
     ast.parse(RUNTIME_PATH.read_text(encoding="utf-8"))
     ast.parse(VALIDATION_PATH.read_text(encoding="utf-8"))
+    ast.parse(SMOKE_PATH.read_text(encoding="utf-8"))
 
 
 def test_extraction_uses_inference_mode_fp16_and_no_shuffle() -> None:
@@ -48,3 +50,14 @@ def test_validation_callback_is_validation_only_and_atomic() -> None:
     assert "dataset_utterance_ids != trial_utterance_ids" in source
     assert "allow_nan=False" in source
     assert "os.replace(partial, path)" in source
+
+
+def test_real_gate_is_bounded_and_uses_every_fixture_utterance() -> None:
+    """The CUDA gate must test multi-crop integration without claiming quality."""
+    source = SMOKE_PATH.read_text(encoding="utf-8")
+
+    assert '"speaker_count": 4' in source
+    assert '"utterance_count": 8' in source
+    assert '"trial_count": 16' in source
+    assert "segment_count=2" in source
+    assert "security_threshold_not_selected" in source
