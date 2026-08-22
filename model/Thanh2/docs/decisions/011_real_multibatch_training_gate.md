@@ -1,7 +1,7 @@
 # Decision 011: Real Multi-Batch Training Gate
 
 Date: 2026-08-22
-Status: protocol implemented; Kaggle evidence pending
+Status: accepted
 
 ## Purpose
 
@@ -53,6 +53,48 @@ Passing proves that the canonical loader, deterministic cropper, NumPy-to-torch
 boundary, adapter, AAM objective, gradient clipping, mixed precision, and every
 optimizer group work together for consecutive real batches. It is not evidence
 of convergence, generalization, EER, minDCF, or optimal hyperparameters.
+
+## Accepted Evidence
+
+All three gates ran on a Tesla T4 with PyTorch `2.10.0+cu128` and CUDA `12.8`.
+The standalone validator accepted the downloaded artifacts on 2026-08-22.
+
+| Model | Batch | Speakers | Losses | Maximum allocated CUDA memory |
+|---|---:|---:|---|---:|
+| ECAPA-TDNN | 24 | 72 | 17.0302, 16.5165, 16.2269 | 2,115,798,528 bytes |
+| RawNet3 | 24 | 72 | 15.9232, 15.8536, 15.7804 | 4,014,210,560 bytes |
+| WavLM+MHFA | 6 | 18 | 15.6114, 15.7050, 16.2116 | 2,097,213,952 bytes |
+
+Every loss and pre-clipping gradient norm was finite, every GradScaler scale
+remained `1024`, and all required groups changed parameters. WavLM Transformer
+layer 11 was inactive only in step 2, consistent with retained layerdrop
+`0.05`; it updated in steps 1 and 3, so all Transformer groups updated across
+the gate.
+
+The evidence configuration fingerprints, captured before promoting the batch
+status, are:
+
+- ECAPA-TDNN: `df84325195e8aaa3f8c4fa55aeefd567fa299a9df70e8784c2a01a90efabbd39`;
+- RawNet3: `2b406d42e42759ad7b2ba2a590ba9cd990cf19cc864fc483bc0e6d9d9d568255`;
+- WavLM+MHFA: `7bcbd77b64f66a2b73c032e5dd321cbd4b0f4fe91290db926408a89448720534`.
+
+Accepted artifact SHA-256 values:
+
+- `results/model_audit/multibatch_training/ecapa_tdnn_tidyvoice_t4.json`:
+  `1899114632aaaf484d6e1d8ecc24c4d6e26d4f9f4b70b0178c938fe4abf8b118`;
+- `results/model_audit/multibatch_training/rawnet3_tidyvoice_t4.json`:
+  `2298171eafcf1a564fee2935527571c649700953bb6e14c2f67992139a221079`;
+- `results/model_audit/multibatch_training/wavlm_mhfa_tidyvoice_t4.json`:
+  `8f1ba20bf9baf2b089f27f9ca3f6c524f54c231d6addebf3e277d777813048c2`.
+
+The downloaded archive SHA-256 was
+`b34b7f486e8973f1d89568665bd2305362690e6a2e16a25568202757112a150d`.
+The archive is not committed because ZIP files are generated transport
+artifacts; the validated JSON contents are committed individually.
+
+The accepted epoch-training batch sizes are therefore ECAPA-TDNN `24`,
+RawNet3 `24`, and WavLM+MHFA `6`. Learning rates and full recipes remain
+screening candidates until validation-metric experiments are complete.
 
 ## Advantages
 

@@ -746,8 +746,9 @@ The new pipeline must address these limitations or document why a limitation rem
   with finite loss, finite gradients, and a verified target-head update.
 - Corrected archive SHA-256:
   `da0499d164e5940d50c506518407d75270e52b5c22c06515a62136600b535fc4`.
-- Memory-calibrated candidates pending distinct multi-batch validation are:
-  ECAPA-TDNN batch `24`, RawNet3 batch `24`, and WavLM+MHFA batch `6`.
+- Memory-calibrated candidates subsequently accepted by distinct multi-batch
+  validation are ECAPA-TDNN batch `24`, RawNet3 batch `24`, and WavLM+MHFA
+  batch `6`.
 - Accepted evidence artifacts and SHA-256 values:
   - `results/model_audit/training_memory/ecapa_tdnn_vimd_classes_t4.json`:
     `e2b651670cb509954f0706345ec2801d61006a76ab8867033fbb495752d30397`;
@@ -757,7 +758,7 @@ The new pipeline must address these limitations or document why a limitation rem
     `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The dependency-free local regression suite contains 141 passing tests.
+- The dependency-free local regression suite contains 144 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
 
@@ -779,5 +780,20 @@ The new pipeline must address these limitations or document why a limitation rem
 - This gate proves integration only, not convergence or validation quality.
 - A standalone dependency-free validator must accept every downloaded JSON
   artifact before evidence is committed.
+- The 2026-08-22 Kaggle gates passed for all three models on a Tesla T4 with
+  PyTorch `2.10.0+cu128` and CUDA `12.8`. ECAPA-TDNN and RawNet3 each updated
+  across 72 distinct speakers; WavLM+MHFA updated across 18 distinct speakers.
+- Every recorded loss and gradient norm was finite, every FP16 scale remained
+  `1024`, and all optimizer groups updated across the gate. WavLM Transformer
+  layer 11 was inactive only in step 2 under the retained layerdrop policy and
+  updated in steps 1 and 3.
+- Accepted artifact SHA-256 values are:
+  - ECAPA-TDNN:
+    `1899114632aaaf484d6e1d8ecc24c4d6e26d4f9f4b70b0178c938fe4abf8b118`;
+  - RawNet3:
+    `2298171eafcf1a564fee2935527571c649700953bb6e14c2f67992139a221079`;
+  - WavLM+MHFA:
+    `8f1ba20bf9baf2b089f27f9ca3f6c524f54c231d6addebf3e277d777813048c2`.
+- Accepted batch status is `multibatch_validated_ready_for_epoch_training`.
 - Protocol decision:
   `docs/decisions/011_real_multibatch_training_gate.md`.

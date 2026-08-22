@@ -61,7 +61,9 @@ def _payload() -> dict[str, object]:
             "full_training_speaker_count": 3_666,
             "selected_speaker_count": 72,
             "selected_utterance_count": 72,
-            "selected_utterance_ids_sha256": "a" * 64,
+            "selected_utterance_ids_sha256": (
+                "2de4dd8b8e25f8122f37ad8378e22abf28646ecc51816cfcd163e317dd381318"
+            ),
             "one_utterance_per_speaker": True,
             "segment_samples": 48_000,
         },
@@ -69,7 +71,16 @@ def _payload() -> dict[str, object]:
             "batch_size": 24,
             "steps": 3,
             "mixed_precision": "fp16",
-            "optimizer": {"group_names": groups},
+            "objective": {
+                "name": "aam_softmax",
+                "margin": 0.2,
+                "scale": 30.0,
+            },
+            "optimizer": {
+                "name": "adam",
+                "group_names": groups,
+                "group_parameter_counts": [20_767_552, 703_872],
+            },
         },
         "runtime": {
             "device_name": "Tesla T4",
@@ -90,7 +101,9 @@ def _payload() -> dict[str, object]:
             "all_optimizer_groups_updated_across_gate": True,
             "loss_scale_never_backed_off": True,
         },
-        "config_sha256": "b" * 64,
+        "config_sha256": (
+            "df84325195e8aaa3f8c4fa55aeefd567fa299a9df70e8784c2a01a90efabbd39"
+        ),
     }
 
 
@@ -112,6 +125,37 @@ def test_accept_complete_three_step_evidence(tmp_path: Path) -> None:
         "batch_size": 24,
         "steps": 3,
         "distinct_speakers": 72,
+    }
+
+
+@pytest.mark.parametrize(
+    ("filename", "model_name", "batch_size", "speaker_count"),
+    [
+        ("ecapa_tdnn_tidyvoice_t4.json", "ecapa_tdnn", 24, 72),
+        ("rawnet3_tidyvoice_t4.json", "rawnet3", 24, 72),
+        ("wavlm_mhfa_tidyvoice_t4.json", "wavlm_mhfa", 6, 18),
+    ],
+)
+def test_accept_committed_kaggle_evidence(
+    filename: str,
+    model_name: str,
+    batch_size: int,
+    speaker_count: int,
+) -> None:
+    """Committed evidence must keep passing the strict acceptance boundary."""
+    artifact = (
+        PROJECT_ROOT
+        / "results"
+        / "model_audit"
+        / "multibatch_training"
+        / filename
+    )
+
+    assert _load_validator().validate_artifact(artifact) == {
+        "model": model_name,
+        "batch_size": batch_size,
+        "steps": 3,
+        "distinct_speakers": speaker_count,
     }
 
 

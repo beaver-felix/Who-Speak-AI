@@ -41,12 +41,13 @@ class AamSoftmaxSpec:
 
 @dataclass(frozen=True, slots=True)
 class BatchSpec:
-    """Describe a memory-calibrated batch candidate and its evidence path."""
+    """Describe a memory- and multi-batch-validated training batch."""
 
     size: int
     calibrated_largest_passing_size: int
     selection_status: str
     calibration_artifact: str
+    validation_artifact: str
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "BatchSpec":
@@ -58,10 +59,9 @@ class BatchSpec:
                 "Batch size cannot exceed its calibrated passing maximum."
             )
         status = _non_empty_text(values, "selection_status")
-        if status != "memory_calibrated_pending_multibatch_validation":
+        if status != "multibatch_validated_ready_for_epoch_training":
             raise TrainingSpecificationError(
-                "Batch selection status must remain pending multi-batch "
-                "validation."
+                "Batch selection status must prove multi-batch validation."
             )
         return cls(
             size=size,
@@ -70,6 +70,10 @@ class BatchSpec:
             calibration_artifact=_non_empty_text(
                 values,
                 "calibration_artifact",
+            ),
+            validation_artifact=_non_empty_text(
+                values,
+                "validation_artifact",
             ),
         )
 

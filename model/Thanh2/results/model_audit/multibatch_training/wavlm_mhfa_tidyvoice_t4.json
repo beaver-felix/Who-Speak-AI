@@ -1,0 +1,186 @@
+{
+  "checks": {
+    "all_audio_finite": true,
+    "all_available_groups_updated": true,
+    "all_embeddings_finite": true,
+    "all_gradient_norms_finite": true,
+    "all_losses_finite": true,
+    "all_optimizer_groups_updated_across_gate": true,
+    "all_speakers_are_distinct": true,
+    "all_utterances_are_distinct": true,
+    "loss_scale_never_backed_off": true,
+    "mandatory_groups_updated_each_step": true,
+    "step_count_matches": true
+  },
+  "config_sha256": "7bcbd77b64f66a2b73c032e5dd321cbd4b0f4fe91290db926408a89448720534",
+  "data": {
+    "full_training_speaker_count": 3666,
+    "name": "tidyvoice",
+    "one_utterance_per_speaker": true,
+    "segment_samples": 48240,
+    "selected_speaker_count": 18,
+    "selected_utterance_count": 18,
+    "selected_utterance_ids_sha256": "4f01bd02c02ab81862723cfc181960927a31e73678db8ffc55910e8376bb211e"
+  },
+  "model": {
+    "embedding_dim": 256,
+    "name": "wavlm_mhfa",
+    "parameter_count": 96684490
+  },
+  "purpose": "multirecord_multibatch_training_gate_not_performance",
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "device_name": "Tesla T4",
+    "torch_version": "2.10.0+cu128"
+  },
+  "schema_version": 1,
+  "steps": [
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 6,
+      "distinct_speakers": 6,
+      "distinct_utterances": 6,
+      "elapsed_seconds": 1.1081416990000434,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 40.72917938232422,
+      "groups_without_nonzero_gradient": [],
+      "loss": 15.611404418945312,
+      "peak_allocated_bytes": 1514451968,
+      "peak_reserved_bytes": 1665138688,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 1,
+      "updated_groups": [
+        "transformer_layer_00",
+        "transformer_layer_01",
+        "transformer_layer_02",
+        "transformer_layer_03",
+        "transformer_layer_04",
+        "transformer_layer_05",
+        "transformer_layer_06",
+        "transformer_layer_07",
+        "transformer_layer_08",
+        "transformer_layer_09",
+        "transformer_layer_10",
+        "transformer_layer_11",
+        "mhfa",
+        "aam_softmax_head"
+      ]
+    },
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 6,
+      "distinct_speakers": 6,
+      "distinct_utterances": 6,
+      "elapsed_seconds": 0.15137925400085805,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 38.48823928833008,
+      "groups_without_nonzero_gradient": [
+        "transformer_layer_11"
+      ],
+      "loss": 15.704971313476562,
+      "peak_allocated_bytes": 2041689088,
+      "peak_reserved_bytes": 2067791872,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 2,
+      "updated_groups": [
+        "transformer_layer_00",
+        "transformer_layer_01",
+        "transformer_layer_02",
+        "transformer_layer_03",
+        "transformer_layer_04",
+        "transformer_layer_05",
+        "transformer_layer_06",
+        "transformer_layer_07",
+        "transformer_layer_08",
+        "transformer_layer_09",
+        "transformer_layer_10",
+        "mhfa",
+        "aam_softmax_head"
+      ]
+    },
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 6,
+      "distinct_speakers": 6,
+      "distinct_utterances": 6,
+      "elapsed_seconds": 0.14651706599943282,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 38.76638412475586,
+      "groups_without_nonzero_gradient": [],
+      "loss": 16.211637496948242,
+      "peak_allocated_bytes": 2097213952,
+      "peak_reserved_bytes": 2189426688,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 3,
+      "updated_groups": [
+        "transformer_layer_00",
+        "transformer_layer_01",
+        "transformer_layer_02",
+        "transformer_layer_03",
+        "transformer_layer_04",
+        "transformer_layer_05",
+        "transformer_layer_06",
+        "transformer_layer_07",
+        "transformer_layer_08",
+        "transformer_layer_09",
+        "transformer_layer_10",
+        "transformer_layer_11",
+        "mhfa",
+        "aam_softmax_head"
+      ]
+    }
+  ],
+  "training": {
+    "batch_size": 6,
+    "gradient_clip_norm": 5.0,
+    "mixed_precision": "fp16",
+    "objective": {
+      "margin": 0.2,
+      "name": "aam_softmax",
+      "scale": 30.0
+    },
+    "optimizer": {
+      "group_names": [
+        "transformer_layer_00",
+        "transformer_layer_01",
+        "transformer_layer_02",
+        "transformer_layer_03",
+        "transformer_layer_04",
+        "transformer_layer_05",
+        "transformer_layer_06",
+        "transformer_layer_07",
+        "transformer_layer_08",
+        "transformer_layer_09",
+        "transformer_layer_10",
+        "transformer_layer_11",
+        "mhfa",
+        "aam_softmax_head"
+      ],
+      "group_parameter_counts": [
+        7092244,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        7088404,
+        2302554,
+        938496
+      ],
+      "name": "adamw"
+    },
+    "steps": 3
+  }
+}

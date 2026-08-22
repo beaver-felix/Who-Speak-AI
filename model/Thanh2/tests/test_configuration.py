@@ -50,7 +50,10 @@ def test_repository_layers_resolve_all_six_experiments(
     expected_batch_size = 6 if model_name == "wavlm_mhfa" else 24
     assert resolved.get("training.batch.size") == expected_batch_size
     assert resolved.get("training.batch.selection_status") == (
-        "memory_calibrated_pending_multibatch_validation"
+        "multibatch_validated_ready_for_epoch_training"
+    )
+    assert str(resolved.get("training.batch.validation_artifact")).endswith(
+        f"{model_name}_tidyvoice_t4.json"
     )
     assert len(resolved.source_paths) == 3
     assert len(resolved.sha256) == 64
@@ -213,8 +216,9 @@ selection_status = "fixture_pending_validation"
 [training.batch]
 size = 8
 calibrated_largest_passing_size = 10
-selection_status = "memory_calibrated_pending_multibatch_validation"
+selection_status = "multibatch_validated_ready_for_epoch_training"
 calibration_artifact = "fixture.json"
+validation_artifact = "multibatch_fixture.json"
 """.strip()
         + "\n",
         encoding="utf-8",

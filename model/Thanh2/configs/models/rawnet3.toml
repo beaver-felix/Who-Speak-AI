@@ -30,5 +30,6 @@ selection_status = "pretrained_finetuning_hypothesis_pending_validation"
 [training.batch]
 size = 24
 calibrated_largest_passing_size = 32
-selection_status = "memory_calibrated_pending_multibatch_validation"
+selection_status = "multibatch_validated_ready_for_epoch_training"
 calibration_artifact = "results/model_audit/training_memory/rawnet3_vimd_classes_t4.json"
+validation_artifact = "results/model_audit/multibatch_training/rawnet3_tidyvoice_t4.json"

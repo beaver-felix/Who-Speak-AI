@@ -47,9 +47,10 @@ def _resolved_values(model_name: str = "ecapa_tdnn") -> dict[str, object]:
                     8 if model_name == "wavlm_mhfa" else 32
                 ),
                 "selection_status": (
-                    "memory_calibrated_pending_multibatch_validation"
+                    "multibatch_validated_ready_for_epoch_training"
                 ),
                 "calibration_artifact": "fixture.json",
+                "validation_artifact": "multibatch_fixture.json",
             },
             "objective": {
                 "name": "aam_softmax",
@@ -77,6 +78,7 @@ def test_shared_aam_softmax_spec_is_parsed_exactly() -> None:
     assert specification.gradient_clip_norm == pytest.approx(5.0)
     assert specification.batch.size == 24
     assert specification.batch.calibrated_largest_passing_size == 32
+    assert specification.batch.validation_artifact == "multibatch_fixture.json"
 
 
 def test_ecapa_and_rawnet_use_complete_encoder_policy() -> None:

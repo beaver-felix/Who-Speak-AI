@@ -27,9 +27,10 @@ python scripts/resolve_config.py \
 
 The shared AAM-Softmax control and the architecture-specific optimizer groups
 are now explicit. Their values are initial, source-informed screening
-candidates—not final selected recipes. Batch size remains unset until Kaggle
-memory calibration and a multi-batch mini-run; scheduler, augmentation, and
-epoch budget remain unset until validation evidence exists.
+candidates, not final selected recipes. Batch sizes `24`, `24`, and `6` for
+ECAPA-TDNN, RawNet3, and WavLM+MHFA respectively passed both T4 memory
+calibration and a three-step real multi-batch gate. Scheduler, augmentation,
+and epoch budget remain unset until validation evidence exists.
 
 ## Advantages
 

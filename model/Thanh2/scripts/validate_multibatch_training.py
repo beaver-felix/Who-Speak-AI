@@ -16,6 +16,14 @@ EXPECTED_MODELS = {
         "batch_size": 24,
         "segment_samples": 48_000,
         "group_names": ("encoder", "aam_softmax_head"),
+        "group_parameter_counts": (20_767_552, 703_872),
+        "optimizer": "adam",
+        "utterance_sha256": (
+            "2de4dd8b8e25f8122f37ad8378e22abf28646ecc51816cfcd163e317dd381318"
+        ),
+        "config_sha256": (
+            "df84325195e8aaa3f8c4fa55aeefd567fa299a9df70e8784c2a01a90efabbd39"
+        ),
     },
     "rawnet3": {
         "embedding_dim": 256,
@@ -23,6 +31,14 @@ EXPECTED_MODELS = {
         "batch_size": 24,
         "segment_samples": 48_240,
         "group_names": ("encoder", "aam_softmax_head"),
+        "group_parameter_counts": (16_280_322, 938_496),
+        "optimizer": "adam",
+        "utterance_sha256": (
+            "2de4dd8b8e25f8122f37ad8378e22abf28646ecc51816cfcd163e317dd381318"
+        ),
+        "config_sha256": (
+            "2b406d42e42759ad7b2ba2a590ba9cd990cf19cc864fc483bc0e6d9d9d568255"
+        ),
     },
     "wavlm_mhfa": {
         "embedding_dim": 256,
@@ -33,6 +49,19 @@ EXPECTED_MODELS = {
             *(f"transformer_layer_{index:02d}" for index in range(12)),
             "mhfa",
             "aam_softmax_head",
+        ),
+        "group_parameter_counts": (
+            7_092_244,
+            *(7_088_404 for _ in range(11)),
+            2_302_554,
+            938_496,
+        ),
+        "optimizer": "adamw",
+        "utterance_sha256": (
+            "4f01bd02c02ab81862723cfc181960927a31e73678db8ffc55910e8376bb211e"
+        ),
+        "config_sha256": (
+            "7bcbd77b64f66a2b73c032e5dd321cbd4b0f4fe91290db926408a89448720534"
         ),
     },
 }
@@ -97,7 +126,7 @@ def validate_artifact(path: Path) -> dict[str, Any]:
         if data.get(field) != expected_value:
             raise ValueError(f"{path.name}: invalid data {field}.")
     digest = data.get("selected_utterance_ids_sha256")
-    if not isinstance(digest, str) or len(digest) != 64:
+    if digest != expected["utterance_sha256"]:
         raise ValueError(f"{path.name}: invalid utterance fingerprint.")
     if training.get("batch_size") != batch_size:
         raise ValueError(f"{path.name}: invalid candidate batch size.")
@@ -108,6 +137,19 @@ def validate_artifact(path: Path) -> dict[str, Any]:
     expected_groups = tuple(expected["group_names"])
     if tuple(optimizer.get("group_names", ())) != expected_groups:
         raise ValueError(f"{path.name}: optimizer groups changed.")
+    if tuple(optimizer.get("group_parameter_counts", ())) != tuple(
+        expected["group_parameter_counts"]
+    ):
+        raise ValueError(f"{path.name}: optimizer group sizes changed.")
+    if optimizer.get("name") != expected["optimizer"]:
+        raise ValueError(f"{path.name}: optimizer changed.")
+    expected_objective = {
+        "name": "aam_softmax",
+        "margin": 0.2,
+        "scale": 30.0,
+    }
+    if training.get("objective") != expected_objective:
+        raise ValueError(f"{path.name}: objective changed.")
 
     checks = _mapping(payload, "checks", path)
     if set(checks) != EXPECTED_CHECKS or not all(
@@ -175,7 +217,7 @@ def validate_artifact(path: Path) -> dict[str, Any]:
     if runtime.get("cuda_version") != "12.8":
         raise ValueError(f"{path.name}: unexpected CUDA runtime.")
     config_sha256 = payload.get("config_sha256")
-    if not isinstance(config_sha256, str) or len(config_sha256) != 64:
+    if config_sha256 != expected["config_sha256"]:
         raise ValueError(f"{path.name}: invalid configuration fingerprint.")
     return {
         "model": model_name,

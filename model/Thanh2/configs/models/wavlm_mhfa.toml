@@ -49,5 +49,6 @@ selection_status = "pinned_source_base_recipe_pending_validation"
 [training.batch]
 size = 6
 calibrated_largest_passing_size = 8
-selection_status = "memory_calibrated_pending_multibatch_validation"
+selection_status = "multibatch_validated_ready_for_epoch_training"
 calibration_artifact = "results/model_audit/training_memory/wavlm_mhfa_vimd_classes_t4.json"
+validation_artifact = "results/model_audit/multibatch_training/wavlm_mhfa_tidyvoice_t4.json"
