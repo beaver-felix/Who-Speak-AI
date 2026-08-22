@@ -66,9 +66,9 @@ def test_source_record_pins_audited_repository_hashes() -> None:
     source = (VENDORED_ROOT / "SOURCE.md").read_text(encoding="utf-8")
 
     assert "f51bab870672a9b0b50fa158b4e30f329e7866d7" in source
-    assert "6d8e752e166b5e806a5afc919345f38e9353a0318ca35cdddd758c78d7bf50ef" in source
-    assert "baafa9b1aa88bb249e18f94cab895ede106b768f6fff417b0189acac959a0910" in source
-    assert "5681f648d9c5415fe61eb97e911cfffedcc1984f02af526fa437070cee1aecfc" in source
+    assert "8daf5e486055fceda56b0571fc70c685bf9d19a6f41463f4193b88a1f34b1636" in source
+    assert "63795b5d0cbde5b1cd502fac09ea84962184abd96446e65851b3d400c2454f76" in source
+    assert "86147c93a19287fef53accd4137d6474190db78c6833e8d9dc4f196331e3d5f8" in source
 
 
 def test_vendored_source_includes_upstream_mit_terms() -> None:

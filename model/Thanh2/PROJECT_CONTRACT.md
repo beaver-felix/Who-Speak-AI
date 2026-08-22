@@ -668,3 +668,33 @@ The new pipeline must address these limitations or document why a limitation rem
   benchmark performance.
 - Accepted methodology record:
   `docs/decisions/008_rawnet3_adapter_implementation.md`.
+
+## Pending WavLM+MHFA Adapter Gate — 2026-08-22
+
+- Source is pinned to `theolepage/wavlm_ssl_sv` revision
+  `bfb8527de83b5347fb81b1e9e31be241656ca103`.
+- The official fine-tuned `model000000018.model` checkpoint is selected instead
+  of random MHFA initialization.
+- Its observed SHA-256 reproducibility fingerprint is
+  `0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da`.
+- Restricted audit found 259 tensor entries: 248 WavLM, 10 MHFA, and one source
+  loss weight.
+- The complete pretrained WavLM and MHFA states are retained; the incompatible
+  7,500-class upstream source-loss tensor is excluded.
+- Combined adapter parameters are 96,684,490 and shared output is
+  L2-normalized `[batch, 256]`.
+- All executable upstream source files are pinned by SHA-256 before dynamic
+  import; the adapted MHFA retains its MIT license and provenance.
+- The exact 35-field WavLM-Base+ configuration is preserved from the safely
+  inspected Microsoft initialization artifact.
+- The official `torch.no_grad()` convolutional-feature boundary is preserved.
+  Training gradients are expected in the 12 Transformer layers and MHFA, not
+  in the feature extractor or input waveform.
+- Checkpoint audit artifact:
+  `results/model_audit/wavlm_mhfa_checkpoint_audit.json`.
+- Audit artifact SHA-256:
+  `1a677d8b58b5fac8b843b062bfba4a0b9b316c66b37de332e3288681643c9572`.
+- Status remains pending until strict construction, deterministic real-speech
+  inference, component-gradient checks, and T4 memory evidence pass on Kaggle.
+- Methodology record:
+  `docs/decisions/009_wavlm_mhfa_adapter_implementation.md`.

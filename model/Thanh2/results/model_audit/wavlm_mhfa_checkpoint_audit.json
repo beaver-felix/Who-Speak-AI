@@ -1,0 +1,187 @@
+{
+  "checkpoint": {
+    "first_20_entries": {
+      "__S__.model.encoder.layers.0.self_attn.grep_a": {
+        "dtype": "torch.float32",
+        "shape": [
+          1,
+          12,
+          1,
+          1
+        ]
+      },
+      "__S__.model.encoder.layers.0.self_attn.k_proj.bias": {
+        "dtype": "torch.float32",
+        "shape": [
+          768
+        ]
+      },
+      "__S__.model.encoder.layers.0.self_attn.k_proj.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          768,
+          768
+        ]
+      },
+      "__S__.model.encoder.layers.0.self_attn.relative_attention_bias.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          320,
+          12
+        ]
+      },
+      "__S__.model.encoder.layers.0.self_attn.v_proj.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          768,
+          768
+        ]
+      },
+      "__S__.model.encoder.pos_conv.0.bias": {
+        "dtype": "torch.float32",
+        "shape": [
+          768
+        ]
+      },
+      "__S__.model.encoder.pos_conv.0.weight_g": {
+        "dtype": "torch.float32",
+        "shape": [
+          1,
+          1,
+          128
+        ]
+      },
+      "__S__.model.encoder.pos_conv.0.weight_v": {
+        "dtype": "torch.float32",
+        "shape": [
+          768,
+          48,
+          128
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.0.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          1,
+          10
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.0.2.bias": {
+        "dtype": "torch.float32",
+        "shape": [
+          512
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.0.2.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.1.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          3
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.2.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          3
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.3.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          3
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.4.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          3
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.5.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          2
+        ]
+      },
+      "__S__.model.feature_extractor.conv_layers.6.0.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          512,
+          512,
+          2
+        ]
+      },
+      "__S__.model.mask_emb": {
+        "dtype": "torch.float32",
+        "shape": [
+          768
+        ]
+      },
+      "__S__.model.post_extract_proj.bias": {
+        "dtype": "torch.float32",
+        "shape": [
+          768
+        ]
+      },
+      "__S__.model.post_extract_proj.weight": {
+        "dtype": "torch.float32",
+        "shape": [
+          768,
+          512
+        ]
+      }
+    },
+    "groups": {
+      "mhfa": {
+        "tensor_count": 10,
+        "tensor_elements": 2302554
+      },
+      "source_loss": {
+        "tensor_count": 1,
+        "tensor_elements": 1920000
+      },
+      "wavlm": {
+        "tensor_count": 248,
+        "tensor_elements": 94381936
+      }
+    },
+    "non_tensor_count": 0,
+    "sha256": "0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da",
+    "size_bytes": 394518651,
+    "tensor_count": 259,
+    "tensor_elements": 98604490,
+    "unsafe_globals": []
+  },
+  "checks": {
+    "mhfa_present": true,
+    "required_keys_present": true,
+    "restricted_load_passed": true,
+    "source_loss_present": true,
+    "tensor_only_state": true,
+    "wavlm_present": true
+  },
+  "schema_version": 1,
+  "source": {
+    "filename": "model000000018.model",
+    "google_drive_file_id": "1RabuRETASqhh39K8weSoNkBa5DGRvgyx",
+    "google_drive_folder_id": "1ygZPvdGwepWDDfIQp6aPRktt2QxLt6cE",
+    "repository": "theolepage/wavlm_ssl_sv",
+    "repository_revision": "bfb8527de83b5347fb81b1e9e31be241656ca103"
+  }
+}

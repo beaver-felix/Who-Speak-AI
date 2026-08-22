@@ -3,7 +3,7 @@ name = "wavlm_mhfa"
 source_id = "theolepage/wavlm_ssl_sv"
 revision = "bfb8527de83b5347fb81b1e9e31be241656ca103"
 embedding_dim = 256
-initialization = "wavlm_base_plus"
+initialization = "pretrained_wavlm_and_mhfa"
 
 [model.architecture]
 wavlm_layers = 12
@@ -15,6 +15,14 @@ total_parameter_count = 96684490
 wavlm_parameter_count = 94381936
 wavlm_checkpoint_sha256 = "fcbcf2a94def92e90e086bb0727275d53b75a9c0e483e2abfa560ac951986b6d"
 strict_checkpoint_compatibility = "passed"
+
+[model.pretrained_speaker_checkpoint]
+filename = "model000000018.model"
+google_drive_file_id = "1RabuRETASqhh39K8weSoNkBa5DGRvgyx"
+sha256 = "0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da"
+wavlm_tensor_count = 248
+mhfa_tensor_count = 10
+source_classifier_policy = "exclude"
 
 [model.reference_recipe]
 training_frames = 300

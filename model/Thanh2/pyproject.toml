@@ -26,6 +26,10 @@ rawnet3 = [
     "asteroid-filterbanks==0.4.0",
     "huggingface-hub>=1.11,<1.12",
 ]
+wavlm_mhfa = [
+    "gdown>=5.2,<5.3",
+    "huggingface-hub>=1.11,<1.12",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -35,6 +39,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "speaker_recognition.third_party.clova_rawnet3" = ["LICENSE.md", "SOURCE.md"]
+"speaker_recognition.third_party.theolepage_wavlm_mhfa" = ["LICENSE.md", "SOURCE.md"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

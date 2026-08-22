@@ -6,13 +6,16 @@ VoxCeleb trainer repository under its MIT license.
 - Repository: `https://github.com/clovaai/voxceleb_trainer`
 - Pinned revision: `f51bab870672a9b0b50fa158b4e30f329e7866d7`
 - Upstream `models/RawNet3.py` SHA-256:
-  `6d8e752e166b5e806a5afc919345f38e9353a0318ca35cdddd758c78d7bf50ef`
+  `8daf5e486055fceda56b0571fc70c685bf9d19a6f41463f4193b88a1f34b1636`
 - Upstream `models/RawNetBasicBlock.py` SHA-256:
-  `baafa9b1aa88bb249e18f94cab895ede106b768f6fff417b0189acac959a0910`
+  `63795b5d0cbde5b1cd502fac09ea84962184abd96446e65851b3d400c2454f76`
 - Upstream `configs/RawNet3_AAM.yaml` SHA-256:
-  `5681f648d9c5415fe61eb97e911cfffedcc1984f02af526fa437070cee1aecfc`
+  `86147c93a19287fef53accd4137d6474190db78c6833e8d9dc4f196331e3d5f8`
 - Upstream `LICENSE.md` SHA-256:
-  `a0e173445bf6b7717f8f7225f3d18be719e858884a20181662ffc37d8f546358`
+  `c8782ff21c6915be5f1edadd5f2515cfb1ea07e092338fcff5e1ae569e7f17f8`
+
+These are canonical Git-blob byte hashes with LF line endings rather than
+hashes after a Windows `core.autocrlf` checkout conversion.
 
 Adaptations are limited to package-relative imports, type annotations,
 docstrings, clearer local names, formatting, explicit input validation, and
