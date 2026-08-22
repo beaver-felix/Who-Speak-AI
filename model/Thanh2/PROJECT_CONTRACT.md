@@ -757,6 +757,27 @@ The new pipeline must address these limitations or document why a limitation rem
     `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The dependency-free local regression suite contains 132 passing tests.
+- The dependency-free local regression suite contains 141 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
+
+## Required Real Multi-Batch Gate — 2026-08-22
+
+- Before epoch training, every model must complete three consecutive optimizer
+  steps through the canonical TidyVoice loader.
+- Accepted candidate batches are ECAPA-TDNN `24`, RawNet3 `24`, and
+  WavLM+MHFA `6`.
+- Each selected item uses a distinct real training speaker and utterance; no
+  identity repeats within or across the three batches.
+- The AAM classifier retains all `3,666` TidyVoice training classes.
+- Every step must have finite audio, embeddings, loss, and pre-clipping
+  gradient norm; no GradScaler backoff is allowed.
+- One finite non-zero gradient and a verified parameter change are required in
+  every active optimizer group. WavLM's official layerdrop `0.05` is retained:
+  MHFA/head must update every step, and all 12 Transformer groups must update
+  at least once across the complete gate.
+- This gate proves integration only, not convergence or validation quality.
+- A standalone dependency-free validator must accept every downloaded JSON
+  artifact before evidence is committed.
+- Protocol decision:
+  `docs/decisions/011_real_multibatch_training_gate.md`.
