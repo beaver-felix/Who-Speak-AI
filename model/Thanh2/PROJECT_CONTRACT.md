@@ -553,13 +553,13 @@ The new pipeline must address these limitations or document why a limitation rem
   by the 62-test regression suite.
 - Methodology decision: `docs/decisions/004_verification_metrics.md`.
 
-## Verification Trial Protocol Implementation — 2026-08-20
+## Accepted Verification Trial Protocol — 2026-08-22
 
 - Deterministic genuine and impostor trial construction is implemented for
   canonical Validation and Test partitions.
 - Genuine trials are capped per speaker; impostor generation samples speaker
   identities uniformly before sampling utterances.
-- The proposed fixed settings are seed 42, at most 20 genuine pairs per
+- The accepted fixed settings are seed 42, at most 20 genuine pairs per
   speaker, and 100,000 unique impostor pairs per dataset/split.
 - One hundred thousand impostor trials provide an empirical FAR resolution of
   0.001 percentage points, supporting analysis at the required FAR 0.01%
@@ -567,6 +567,13 @@ The new pipeline must address these limitations or document why a limitation rem
 - Trial lists receive deterministic SHA-256 fingerprints and are shared by all
   three models.
 - The complete local regression suite contains 68 passing tests.
-- The real-data protocol artifact and its four final fingerprints remain
-  pending Kaggle execution; the settings are not considered fully accepted
-  until that evidence is reviewed.
+- TidyVoice Validation contains 7,954 genuine and 100,000 impostor trials;
+  Test contains 7,898 genuine and 100,000 impostor trials.
+- ViMD Validation contains 863 genuine and 100,000 impostor trials; Test
+  contains 1,042 genuine and 100,000 impostor trials.
+- Real-data evidence artifact:
+  `results/data_audit/verification_trial_protocols.json`.
+- Artifact SHA-256:
+  `89f71c9354a6fd3760284348d9d3277a7acb68175f274e4ae07288b35eb785e5`.
+- Methodology decision:
+  `docs/decisions/005_verification_trial_protocol.md`.
