@@ -823,5 +823,9 @@ The new pipeline must address these limitations or document why a limitation rem
   `scripts/smoke_test_checkpoint_resume.py`; downloaded evidence must pass
   `scripts/validate_checkpoint_resume.py` before acceptance. It compares 14
   exact checkpoint, cursor, metric, state, GradScaler, and RNG-output checks.
+- Kaggle gate attempt 1 was rejected before restore because PyTorch's
+  `TorchVersion` string subclass was not allowed by weights-only loading. The
+  writer now stores a built-in version string; `weights_only=True` remains
+  mandatory and no pickle global is allowlisted. A clean rerun is required.
 - Methodology decision:
   `docs/decisions/012_restart_safe_epoch_training_lifecycle.md`.

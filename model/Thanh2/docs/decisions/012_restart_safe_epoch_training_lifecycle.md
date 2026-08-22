@@ -96,3 +96,15 @@ checks compare the second-step metrics, complete component state hashes,
 cursor, checkpoint/sidecar hashes, and dropout-dependent embedding hash. The
 downloaded JSON must pass `scripts/validate_checkpoint_resume.py` locally
 before the gate status changes to accepted.
+
+### Rejected Kaggle Attempt 1
+
+The first 2026-08-22 gate run stopped during safe restore before producing
+evidence. PyTorch `2.10.0+cu128` represents `torch.__version__` as a
+`TorchVersion` string subclass. Saving that object introduced a pickle global
+that `torch.load(..., weights_only=True)` correctly rejected. The checkpoint
+writer now normalizes the version to a built-in `str`. We explicitly rejected
+the alternatives of `weights_only=False` and allowlisting `TorchVersion`
+because runtime provenance requires only primitive text and does not justify a
+broader deserialization boundary. The gate must be rerun; this failure is not
+accepted resume evidence.

@@ -90,7 +90,11 @@ def save_training_checkpoint(
         "torch_cpu_rng_state": torch.get_rng_state(),
         "torch_cuda_rng_state": torch.cuda.get_rng_state(device),
         "runtime": {
-            "torch_version": torch.__version__,
+            # PyTorch exposes ``__version__`` as TorchVersion, a ``str``
+            # subclass that is intentionally rejected by weights-only load.
+            # Normalize it so the checkpoint contains primitives and tensors
+            # only; do not weaken safe loading by allowlisting a pickle global.
+            "torch_version": str(torch.__version__),
             "cuda_version": torch.version.cuda,
             "device": device,
         },

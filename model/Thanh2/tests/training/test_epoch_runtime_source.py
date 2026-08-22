@@ -37,6 +37,7 @@ def test_checkpoint_uses_safe_load_and_atomic_replace() -> None:
     ).read_text(encoding="utf-8")
 
     assert "weights_only=True" in source
+    assert '"torch_version": str(torch.__version__)' in source
     assert "os.replace(partial, destination)" in source
     assert "os.fsync" in source
     assert "Checkpoint identity does not match" in source
