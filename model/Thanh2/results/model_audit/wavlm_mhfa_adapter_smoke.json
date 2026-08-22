@@ -1,0 +1,58 @@
+{
+  "gradient_policy": {
+    "feature_extractor": "official_no_grad_boundary",
+    "optimized_components": [
+      "wavlm_transformer_layers",
+      "mhfa"
+    ]
+  },
+  "model": {
+    "checkpoint_filename": "model000000018.model",
+    "checkpoint_sha256": "0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da",
+    "embedding_dim": 256,
+    "name": "wavlm_mhfa",
+    "parameter_count": 96684490,
+    "revision": "bfb8527de83b5347fb81b1e9e31be241656ca103",
+    "source_classifier_included": false,
+    "source_id": "theolepage/wavlm_ssl_sv",
+    "trainable_parameter_count": 96684490
+  },
+  "result": {
+    "checks": {
+      "checkpoint_sha256_matches": true,
+      "embedding_finite": true,
+      "embedding_l2_normalized": true,
+      "embedding_shape": true,
+      "feature_extractor_gradient_absent_as_designed": true,
+      "mhfa_gradient_nonzero": true,
+      "mhfa_gradient_present": true,
+      "mhfa_gradients_finite": true,
+      "repeat_cosine_at_least_0_99999": true,
+      "transformer_gradient_nonzero": true,
+      "transformer_gradient_present": true,
+      "transformer_gradients_finite": true,
+      "waveform_gradient_absent_as_designed": true
+    },
+    "embedding_norm": 1.0,
+    "embedding_shape": [
+      1,
+      256
+    ],
+    "repeat_cosine_similarity": 1.0
+  },
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "peak_gradient_gate_memory_bytes": 838415872,
+    "torch_version": "2.10.0+cu128"
+  },
+  "sample": {
+    "duration_seconds": 7.656,
+    "evaluation_crop_samples": 64240,
+    "gradient_crop_samples": 48240,
+    "original_samples": 122496,
+    "path": "/kaggle/input/datasets/dullahn/mozzila-tidyvoice/TidyVoiceX_ASV/TidyVoiceX_Train/TidyVoiceX_Train/id010001/cy/cy_30308905.wav",
+    "waveform_sha256": "9d608813bc66beb3d0b0bf72b23e7776abbf7121337c4b3beb737da5a627ac92"
+  },
+  "schema_version": 1
+}

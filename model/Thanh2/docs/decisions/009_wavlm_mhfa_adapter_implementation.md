@@ -1,6 +1,6 @@
 # Decision 009: WavLM+MHFA Adapter Implementation
 
-Status: Pending Kaggle GPU acceptance
+Status: Accepted
 Date: 2026-08-22
 
 ## Context
@@ -113,8 +113,51 @@ TidyVoice speech and require:
 
 The local regression suite contains 107 passing tests after adding six
 dependency-free WavLM+MHFA syntax, checkpoint-surface, license, provenance,
-identity, and audit-artifact checks. Concrete PyTorch behavior remains a
-Kaggle gate.
+identity, and audit-artifact checks.
+
+## Kaggle GPU Evidence
+
+The acceptance gate passed on `cuda:0` with:
+
+- GPU class: Tesla T4
+- PyTorch: `2.10.0+cu128`
+- CUDA build: `12.8`
+- Source revision: `bfb8527de83b5347fb81b1e9e31be241656ca103`
+- Checkpoint SHA-256:
+  `0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da`
+- WavLM+MHFA parameters: 96,684,490
+- Upstream source classifier included: no
+- Real TidyVoice sample: 122,496 samples, 7.656 seconds
+- Evaluation crop: 64,240 samples
+- Gradient crop: 48,240 samples
+- Output shape: `[1, 256]`
+- Output L2 norm: 1.0
+- Repeat cosine similarity: 1.0
+- Transformer gradient present, finite, and non-zero: passed
+- MHFA gradient present, finite, and non-zero: passed
+- Feature-extractor gradient absent under the official boundary: passed
+- Waveform gradient absent under the official boundary: passed
+- Peak CUDA allocation during the gradient gate: 838,415,872 bytes
+  (approximately 0.781 GiB)
+
+Canonical waveform SHA-256:
+`9d608813bc66beb3d0b0bf72b23e7776abbf7121337c4b3beb737da5a627ac92`
+
+Evidence artifact:
+`results/model_audit/wavlm_mhfa_adapter_smoke.json`
+
+Artifact SHA-256:
+`edcc83a454a652c87301d4c0ac6c957f8f0f0c544a41097fbad9f0da52b44b70`
+
+The 0.781 GiB observation covers one forward/backward compatibility gate. It
+does not include optimizer states, a production batch, gradient accumulation,
+DataLoader memory, or cached evaluation embeddings, so it must not be used as
+the final training-memory estimate.
+
+This establishes authenticated-source loading, complete pretrained WavLM and
+MHFA compatibility, deterministic inference, and gradient flow through the
+officially optimized components. It does not establish TidyVoice or ViMD
+verification accuracy and must not be reported as a benchmark result.
 
 ## Advantages
 

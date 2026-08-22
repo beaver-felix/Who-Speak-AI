@@ -669,7 +669,7 @@ The new pipeline must address these limitations or document why a limitation rem
 - Accepted methodology record:
   `docs/decisions/008_rawnet3_adapter_implementation.md`.
 
-## Pending WavLM+MHFA Adapter Gate — 2026-08-22
+## Accepted WavLM+MHFA Adapter — 2026-08-22
 
 - Source is pinned to `theolepage/wavlm_ssl_sv` revision
   `bfb8527de83b5347fb81b1e9e31be241656ca103`.
@@ -694,7 +694,20 @@ The new pipeline must address these limitations or document why a limitation rem
   `results/model_audit/wavlm_mhfa_checkpoint_audit.json`.
 - Audit artifact SHA-256:
   `1a677d8b58b5fac8b843b062bfba4a0b9b316c66b37de332e3288681643c9572`.
-- Status remains pending until strict construction, deterministic real-speech
-  inference, component-gradient checks, and T4 memory evidence pass on Kaggle.
-- Methodology record:
+- The Kaggle T4 gate passed with PyTorch `2.10.0+cu128` and CUDA `12.8`.
+- Real TidyVoice inference passed with shape `[1, 256]`, L2 norm 1.0, and
+  repeat cosine similarity 1.0.
+- Transformer and MHFA gradients were present, finite, and non-zero; feature
+  extractor and waveform gradients were absent as required by the official
+  `no_grad()` boundary.
+- Peak CUDA allocation for the single-crop gradient gate was 838,415,872 bytes
+  (approximately 0.781 GiB). This excludes optimizer and production-batch
+  memory and is not a final training-memory estimate.
+- All thirteen structured acceptance checks passed.
+- Evidence artifact: `results/model_audit/wavlm_mhfa_adapter_smoke.json`.
+- Evidence artifact SHA-256:
+  `edcc83a454a652c87301d4c0ac6c957f8f0f0c544a41097fbad9f0da52b44b70`.
+- This is compatibility and trainability evidence, not TidyVoice or ViMD
+  benchmark performance.
+- Accepted methodology record:
   `docs/decisions/009_wavlm_mhfa_adapter_implementation.md`.
