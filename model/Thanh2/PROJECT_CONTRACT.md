@@ -935,3 +935,25 @@ The new pipeline must address these limitations or document why a limitation rem
   JSON, Python syntax, revision, dataset, GPU, output, and secret guards.
 - Detailed record:
   `docs/decisions/015_resource_constrained_parallel_execution.md`.
+
+## WavLM Non-Finite Precision Correction - 2026-08-22
+
+- Cường's first WavLM+MHFA/TidyVoice attempt is rejected. It completed 578
+  finite updates, then produced a non-finite FP16 embedding at deterministic
+  batch 579; its step-500 checkpoint must not be resumed.
+- WavLM remains FP16 by default. A non-finite embedding triggers one FP32
+  recomputation of the same batch after restoring Python, NumPy, CPU-Torch,
+  and CUDA-Torch random states. FP32 failure remains fatal and includes bounded
+  utterance provenance.
+- ECAPA-TDNN and RawNet3 behavior is unchanged.
+- Evaluation applies the same WavLM-only fallback and records its batch count.
+- New checkpoints safely preserve NumPy MT19937 state because the pinned
+  WavLM layerdrop implementation uses NumPy randomness.
+- The corrected one-click WavLM worker must pass a real three-step, batch-six,
+  full-FP32 TidyVoice gate on T4 before starting either experiment.
+- Cường must use the corrected notebook in a new Kaggle notebook/session and
+  invoke Save & Run All once. No artifact from attempt one may be reused.
+- The local regression suite contains 228 passing tests before notebook
+  repinning.
+- Detailed record:
+  `docs/decisions/016_wavlm_nonfinite_precision_fallback.md`.

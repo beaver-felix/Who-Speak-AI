@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
+
 try:
     import torch
 except ModuleNotFoundError as error:  # pragma: no cover - Kaggle dependency gate.
@@ -87,6 +89,7 @@ def save_training_checkpoint(
         # The sampler and cropper own private deterministic seeds. Global RNG
         # restoration is still required for dropout and layerdrop continuity.
         "python_rng_state": random.getstate(),
+        "numpy_rng_state": _serialize_numpy_rng_state(),
         "torch_cpu_rng_state": torch.get_rng_state(),
         "torch_cuda_rng_state": torch.cuda.get_rng_state(device),
         "runtime": {
@@ -189,15 +192,18 @@ def restore_training_checkpoint(
     scaler.load_state_dict(scaler_state)
 
     python_rng_state = payload.get("python_rng_state")
+    numpy_rng_state = payload.get("numpy_rng_state")
     cpu_rng_state = payload.get("torch_cpu_rng_state")
     cuda_rng_state = payload.get("torch_cuda_rng_state")
     if not isinstance(python_rng_state, tuple):
         raise CheckpointError("Checkpoint Python RNG state is invalid.")
+    restored_numpy_rng_state = _deserialize_numpy_rng_state(numpy_rng_state)
     if not isinstance(cpu_rng_state, torch.Tensor):
         raise CheckpointError("Checkpoint CPU RNG state is invalid.")
     if not isinstance(cuda_rng_state, torch.Tensor):
         raise CheckpointError("Checkpoint CUDA RNG state is invalid.")
     random.setstate(python_rng_state)
+    np.random.set_state(restored_numpy_rng_state)
     torch.set_rng_state(cpu_rng_state.cpu())
     torch.cuda.set_rng_state(cuda_rng_state.cpu(), device=device)
 
@@ -205,6 +211,56 @@ def restore_training_checkpoint(
         cursor=cursor,
         history=history,
         checkpoint_sha256=checkpoint_sha256,
+    )
+
+
+def _serialize_numpy_rng_state() -> dict[str, object]:
+    """Encode NumPy layerdrop state using weights-only-safe values."""
+    generator, keys, position, has_gauss, cached_gaussian = np.random.get_state()
+    return {
+        "generator": str(generator),
+        "keys": torch.from_numpy(np.asarray(keys, dtype=np.uint32).copy()),
+        "position": int(position),
+        "has_gauss": int(has_gauss),
+        "cached_gaussian": float(cached_gaussian),
+    }
+
+
+def _deserialize_numpy_rng_state(
+    value: object,
+) -> tuple[str, np.ndarray, int, int, float]:
+    """Validate and rebuild NumPy RNG state without unsafe pickle globals."""
+    if not isinstance(value, Mapping):
+        raise CheckpointError(
+            "Checkpoint NumPy RNG state is missing; restart with the corrected "
+            "implementation instead of resuming an incompatible WavLM run."
+        )
+    generator = value.get("generator")
+    keys = value.get("keys")
+    position = value.get("position")
+    has_gauss = value.get("has_gauss")
+    cached_gaussian = value.get("cached_gaussian")
+    if (
+        generator != "MT19937"
+        or not isinstance(keys, torch.Tensor)
+        or tuple(keys.shape) != (624,)
+        or keys.dtype != torch.uint32
+        or isinstance(position, bool)
+        or not isinstance(position, int)
+        or not 0 <= position <= 624
+        or isinstance(has_gauss, bool)
+        or has_gauss not in {0, 1}
+        or isinstance(cached_gaussian, bool)
+        or not isinstance(cached_gaussian, (int, float))
+        or not np.isfinite(float(cached_gaussian))
+    ):
+        raise CheckpointError("Checkpoint NumPy RNG state is invalid.")
+    return (
+        generator,
+        keys.detach().cpu().numpy().astype(np.uint32, copy=True),
+        position,
+        has_gauss,
+        float(cached_gaussian),
     )
 
 

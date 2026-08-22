@@ -8,9 +8,12 @@ same lifecycle to serve TidyVoice and ViMD.
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
+
+import numpy as np
 
 try:
     import torch
@@ -290,6 +293,9 @@ class SpeakerTrainingEngine:
                         "gradient_norm_before_clipping"
                     ],
                     "train/loss_scale": batch_metrics["loss_scale"],
+                    "train/fp32_fallback": batch_metrics[
+                        "fp32_fallback"
+                    ],
                     "train/learning_rate_min": min(
                         group["lr"]
                         for group in self.optimizer_bundle.optimizer.param_groups
@@ -324,17 +330,51 @@ class SpeakerTrainingEngine:
         optimizer = self.optimizer_bundle.optimizer
         optimizer.zero_grad(set_to_none=True)
         scale_before = float(self.scaler.get_scale())
+        model_name = getattr(getattr(self.adapter, "metadata", None), "name", None)
+        rng_snapshot = (
+            _capture_rng_state(self.device)
+            if model_name == "wavlm_mhfa"
+            else None
+        )
         with torch.autocast(
             device_type="cuda",
             dtype=torch.float16,
             enabled=True,
         ):
             embeddings = self.adapter(waveforms)
-            output = self.objective(embeddings, labels)
-        if not bool(torch.isfinite(embeddings).all()) or not bool(
-            torch.isfinite(output.loss)
+
+        used_fp32_fallback = False
+        if not bool(torch.isfinite(embeddings).all()):
+            if rng_snapshot is None:
+                raise TrainingEngineError(
+                    "Embedding became non-finite for utterances: "
+                    f"{_bounded_utterance_ids(batch)}."
+                )
+            # WavLM attempt 1 produced its first non-finite FP16 embedding at
+            # deterministic batch 579 after 578 valid updates. Restore every
+            # stochastic state before recomputing so dropout/layerdrop masks
+            # are identical; only arithmetic precision changes.
+            _restore_rng_state(rng_snapshot, self.device)
+            with torch.autocast(device_type="cuda", enabled=False):
+                embeddings = self.adapter(waveforms.float())
+            used_fp32_fallback = True
+            if not bool(torch.isfinite(embeddings).all()):
+                raise TrainingEngineError(
+                    "WavLM embedding remained non-finite after FP32 fallback "
+                    f"for utterances: {_bounded_utterance_ids(batch)}."
+                )
+
+        with torch.autocast(
+            device_type="cuda",
+            dtype=torch.float16,
+            enabled=not used_fp32_fallback,
         ):
-            raise TrainingEngineError("Embedding or loss became non-finite.")
+            output = self.objective(embeddings, labels)
+        if not bool(torch.isfinite(output.loss)):
+            raise TrainingEngineError(
+                "Loss became non-finite for utterances: "
+                f"{_bounded_utterance_ids(batch)}."
+            )
 
         self.scaler.scale(output.loss).backward()
         self.scaler.unscale_(optimizer)
@@ -364,6 +404,7 @@ class SpeakerTrainingEngine:
                 gradient_norm.detach().cpu()
             ),
             "loss_scale": scale_after,
+            "fp32_fallback": float(used_fp32_fallback),
         }
 
     def _save(self, path: str | Path) -> str:
@@ -380,6 +421,34 @@ class SpeakerTrainingEngine:
             optimizer_group_names=self.optimizer_bundle.group_names,
             device=self.device,
         )
+
+
+def _capture_rng_state(device: str) -> tuple[object, object, torch.Tensor, torch.Tensor]:
+    """Snapshot every stochastic source used by WavLM dropout/layerdrop."""
+    return (
+        random.getstate(),
+        np.random.get_state(),
+        torch.get_rng_state(),
+        torch.cuda.get_rng_state(device),
+    )
+
+
+def _restore_rng_state(
+    state: tuple[object, object, torch.Tensor, torch.Tensor],
+    device: str,
+) -> None:
+    """Restore a pre-forward RNG snapshot before precision-only recompute."""
+    python_state, numpy_state, cpu_state, cuda_state = state
+    random.setstate(python_state)
+    np.random.set_state(numpy_state)
+    torch.set_rng_state(cpu_state)
+    torch.cuda.set_rng_state(cuda_state, device=device)
+
+
+def _bounded_utterance_ids(batch: object, *, limit: int = 6) -> list[str]:
+    """Return bounded batch provenance for actionable numerical failures."""
+    values = getattr(batch, "utterance_ids", ())
+    return [str(value) for value in tuple(values)[:limit]]
 
 
 def _validated_validation_metrics(

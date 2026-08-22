@@ -44,6 +44,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--cache-dir", required=True, type=Path)
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
+    parser.add_argument(
+        "--precision",
+        choices=("fp16", "fp32"),
+        default="fp16",
+        help="Arithmetic mode for the bounded integration gate.",
+    )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
@@ -162,7 +168,7 @@ def main() -> None:
         with torch.autocast(
             device_type="cuda",
             dtype=torch.float16,
-            enabled=True,
+            enabled=arguments.precision == "fp16",
         ):
             embeddings = adapter(waveforms)
             output = head(embeddings, labels)
@@ -303,7 +309,7 @@ def main() -> None:
         "training": {
             "batch_size": batch_size,
             "steps": arguments.steps,
-            "mixed_precision": "fp16",
+            "mixed_precision": arguments.precision,
             "gradient_clip_norm": specification.gradient_clip_norm,
             "objective": {
                 "name": "aam_softmax",

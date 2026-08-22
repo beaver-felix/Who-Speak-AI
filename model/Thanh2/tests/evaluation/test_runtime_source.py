@@ -32,6 +32,16 @@ def test_extraction_uses_inference_mode_fp16_and_no_shuffle() -> None:
     assert "utterance_offset != len(dataset)" in source
 
 
+def test_wavlm_evaluation_retries_only_nonfinite_batches_in_fp32() -> None:
+    """Evaluation fallback must be architecture-scoped and auditable."""
+    source = RUNTIME_PATH.read_text(encoding="utf-8")
+
+    assert 'model_name != "wavlm_mhfa"' in source
+    assert "fp32_fallback_batch_count" in source
+    assert 'torch.autocast(device_type="cuda", enabled=False)' in source
+    assert "WavLM evaluation embedding remained non-finite" in source
+
+
 def test_latency_protocol_uses_cuda_events_after_warmup() -> None:
     """Model latency must exclude loading and use synchronized GPU timing."""
     source = RUNTIME_PATH.read_text(encoding="utf-8")

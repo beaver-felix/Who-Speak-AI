@@ -77,6 +77,37 @@ def _run_ecapa_determinism_gate(
     )
 
 
+def _run_wavlm_fp32_fallback_gate(
+    *,
+    project_root: Path,
+    output_root: Path,
+) -> None:
+    """Prove that a real batch-six FP32 fallback fits and updates on T4."""
+    evidence = output_root / "wavlm_fp32_fallback_gate.json"
+    subprocess.run(
+        (
+            sys.executable,
+            str(project_root / "scripts/smoke_test_multibatch_training.py"),
+            "--model",
+            "wavlm_mhfa",
+            "--dataset-root",
+            str(DATASET_ROOTS["tidyvoice"]),
+            "--cache-dir",
+            str(output_root / "cache/wavlm_preflight"),
+            "--steps",
+            "3",
+            "--precision",
+            "fp32",
+            "--device",
+            "cuda:0",
+            "--output",
+            str(evidence),
+        ),
+        cwd=project_root,
+        check=True,
+    )
+
+
 def _archive_outputs(source: Path, destination: Path) -> None:
     """Create a fast, complete ZIP without recompressing tensor checkpoints."""
     partial = destination.with_name(destination.name + ".part")
@@ -123,6 +154,11 @@ def main() -> None:
     )
     if arguments.model == "ecapa_tdnn":
         _run_ecapa_determinism_gate(
+            project_root=project_root,
+            output_root=output_root,
+        )
+    elif arguments.model == "wavlm_mhfa":
+        _run_wavlm_fp32_fallback_gate(
             project_root=project_root,
             output_root=output_root,
         )

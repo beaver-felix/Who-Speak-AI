@@ -63,3 +63,13 @@ def test_gate_preserves_official_wavlm_layerdrop_behavior() -> None:
     assert "layerdrop 0.05" in source
     assert "groups_without_nonzero_gradient" in source
     assert '{"mhfa", "aam_softmax_head"}' in source
+
+
+def test_gate_can_prove_fp32_fallback_memory_and_updates() -> None:
+    """Correction gate must support explicit FP32 without changing defaults."""
+    source = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert '("fp16", "fp32")' in source
+    assert 'default="fp16"' in source
+    assert 'enabled=arguments.precision == "fp16"' in source
+    assert '"mixed_precision": arguments.precision' in source

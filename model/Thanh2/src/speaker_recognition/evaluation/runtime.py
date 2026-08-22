@@ -66,6 +66,7 @@ class ExtractionStatistics:
     batch_count: int
     wall_seconds: float
     model_seconds: float
+    fp32_fallback_batch_count: int = 0
 
     def __post_init__(self) -> None:
         """Reject incomplete or non-finite extraction evidence."""
@@ -76,6 +77,15 @@ class ExtractionStatistics:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{field_name} must be positive.")
+        if (
+            isinstance(self.fp32_fallback_batch_count, bool)
+            or not isinstance(self.fp32_fallback_batch_count, int)
+            or self.fp32_fallback_batch_count < 0
+            or self.fp32_fallback_batch_count > self.batch_count
+        ):
+            raise ValueError(
+                "fp32_fallback_batch_count must lie within [0, batch_count]."
+            )
         for value, field_name in (
             (self.wall_seconds, "wall_seconds"),
             (self.model_seconds, "model_seconds"),
@@ -149,6 +159,7 @@ def extract_utterance_embeddings(
     crop_count = 0
     batch_count = 0
     model_milliseconds = 0.0
+    fp32_fallback_batch_count = 0
     was_training = bool(adapter.training)
     adapter.eval()
     torch.cuda.synchronize(device)
@@ -173,6 +184,26 @@ def extract_utterance_embeddings(
                     enabled=True,
                 ):
                     crop_embeddings = adapter(waveforms)
+                if not bool(torch.isfinite(crop_embeddings).all()):
+                    model_name = getattr(metadata, "name", None)
+                    if model_name != "wavlm_mhfa":
+                        raise EvaluationRuntimeError(
+                            "Evaluation embedding became non-finite for "
+                            f"utterances: {list(batch.utterance_ids[:6])}."
+                        )
+                    # WavLM may overflow for isolated real-audio batches under
+                    # FP16. Evaluation is stochastic-free, so recomputing only
+                    # the affected batch in FP32 preserves exact membership,
+                    # ordering, crops, weights, and scoring.
+                    with torch.autocast(device_type="cuda", enabled=False):
+                        crop_embeddings = adapter(waveforms.float())
+                    fp32_fallback_batch_count += 1
+                    if not bool(torch.isfinite(crop_embeddings).all()):
+                        raise EvaluationRuntimeError(
+                            "WavLM evaluation embedding remained non-finite "
+                            "after FP32 fallback for utterances: "
+                            f"{list(batch.utterance_ids[:6])}."
+                        )
                 finished.record()
                 finished.synchronize()
                 model_milliseconds += float(started.elapsed_time(finished))
@@ -212,6 +243,7 @@ def extract_utterance_embeddings(
         batch_count=batch_count,
         wall_seconds=wall_seconds,
         model_seconds=model_milliseconds / 1000.0,
+        fp32_fallback_batch_count=fp32_fallback_batch_count,
     )
     return table, statistics
 
