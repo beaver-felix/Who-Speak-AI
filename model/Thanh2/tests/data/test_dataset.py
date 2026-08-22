@@ -136,6 +136,9 @@ def test_evaluation_collator_flattens_crops_and_records_offsets(
         np.array([0, 3, 4], dtype=np.int64),
     )
     assert len(batch.utterance_ids) == 2
+    assert dataset.split is Split.TEST
+    assert dataset.segment_samples == 16
+    assert dataset.segment_count == 3
 
 
 def test_dataset_record_order_is_input_order_independent(tmp_path: Path) -> None:

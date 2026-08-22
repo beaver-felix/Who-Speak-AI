@@ -834,3 +834,25 @@ The new pipeline must address these limitations or document why a limitation rem
   `39dbbee464ddca79981192f6f9bcfaa459a6a00d4ec5f17093e78507dcdb180b`.
 - Methodology decision:
   `docs/decisions/012_restart_safe_epoch_training_lifecycle.md`.
+
+## Cached Validation Evaluation Boundary — 2026-08-22
+
+- The training callback accepts canonical Validation only and requires its
+  dataset to contain exactly the utterances referenced by the immutable trial
+  protocol. Test is rejected at this boundary.
+- Each referenced utterance is loaded and encoded once per epoch. Deterministic
+  crop embeddings are averaged and L2-normalized into one cached vector.
+- Trials are cosine-scored exclusively from that cache. Both the trial list and
+  the ordered embedding table receive reproducibility SHA-256 fingerprints.
+- Every epoch reports EER, minDCF, FAR, FRR, TAR, accuracy, and TAR at FAR 5%,
+  1%, 0.1%, and 0.01%.
+- Validation's interpolated EER threshold is diagnostic only. Final Test must
+  apply a security threshold selected and frozen using Validation alone.
+- Extraction uses FP16 inference mode on CUDA and records wall-clock and
+  model-only throughput. Model latency uses a preloaded batch-one crop, 10
+  warm-ups, 50 CUDA-event measurements, and mean/median/p95 milliseconds.
+- Validation evidence is strict finite JSON written by atomic replacement.
+- The local suite contains 186 passing tests. The real T4 evaluation gate is
+  still pending.
+- Methodology decision:
+  `docs/decisions/013_cached_validation_evaluation.md`.

@@ -316,6 +316,7 @@ class EvaluationSpeakerDataset:
             )
 
         self._records = selected
+        self._split = split
         self._audio_loader = CanonicalAudioLoader(
             dataset_roots,
             target_sample_rate=target_sample_rate,
@@ -348,6 +349,21 @@ class EvaluationSpeakerDataset:
     def records(self) -> tuple[ManifestRecord, ...]:
         """Return the deterministic canonical record order."""
         return self._records
+
+    @property
+    def split(self) -> Split:
+        """Return the canonical evaluation partition."""
+        return self._split
+
+    @property
+    def segment_samples(self) -> int:
+        """Return the fixed number of waveform samples in each crop."""
+        return self._segment_samples
+
+    @property
+    def segment_count(self) -> int:
+        """Return the requested deterministic crop count per utterance."""
+        return self._segment_count
 
 
 def collate_training_samples(samples: Sequence[TrainingSample]) -> TrainingBatch:
