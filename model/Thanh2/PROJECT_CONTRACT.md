@@ -736,9 +736,15 @@ The new pipeline must address these limitations or document why a limitation rem
 - The T4 calibration gate must use the conservative ViMD class count `10,291`,
   choose at most 80% of the largest passing size, and then confirm it with a
   distinct multi-batch mini-run.
+- A passing calibration requires finite loss, finite pre-clipping gradient
+  norm, and a proven target-head parameter update. FP16 overflow or a skipped
+  GradScaler optimizer step fails closed.
+- Preliminary schema-1 memory evidence was rejected because it contained
+  non-finite gradient norms and did not prove that GradScaler applied an
+  optimizer update. Only schema-2 artifacts may be accepted.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The dependency-free local regression suite contains 123 passing tests; the
+- The dependency-free local regression suite contains 129 passing tests; the
   concrete objective/optimizer/memory gate still requires Kaggle T4 evidence.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.

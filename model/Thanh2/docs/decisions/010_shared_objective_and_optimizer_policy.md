@@ -81,13 +81,16 @@ Primary source records:
 1. Run the committed real-audio T4 calibration for each model with the ViMD
    class count (`10,291`), the larger classifier and therefore the conservative
    memory case.
-2. Select no more than 80% of the largest passing batch size.
-3. Confirm the candidate using multiple distinct real batches, including loss,
+2. Accept a calibration size only when loss and pre-clipping gradient norm are
+   finite and a target-head parameter is proven to change after the optimizer
+   call. Dynamic-loss-scale overflow or a skipped optimizer step fails closed.
+3. Select no more than 80% of the largest passing batch size.
+4. Confirm the candidate using multiple distinct real batches, including loss,
    finite gradients, peak memory, and optimizer updates.
-4. Run a short validation screen. Compare EER first, then minDCF and FAR/FRR.
-5. If learning is unstable or validation stalls, test one predeclared change at
+5. Run a short validation screen. Compare EER first, then minDCF and FAR/FRR.
+6. If learning is unstable or validation stalls, test one predeclared change at
    a time. Record the hypothesis, result artifact, and acceptance reason.
-6. Test AAM margin `0.3` only after the `0.2` control completes; do not change
+7. Test AAM margin `0.3` only after the `0.2` control completes; do not change
    margin for only one architecture without reporting it as a separate ablation.
 
 ## Acceptance Boundary
@@ -96,6 +99,24 @@ The shared objective and exact update scopes are accepted methodology. Current
 learning rates and weight decay values remain candidates until target-validation
 artifacts justify them. The calibration script measures capacity only; repeated
 one-sample batches are not convergence or accuracy evidence.
+
+## Rejected Preliminary Calibration
+
+The first schema-1 T4 archive was rejected before acceptance even though every
+candidate fit in memory. Its SHA-256 was
+`b0737eb2b921868f8867fb812309a1281fc52ff8133b3575ddaff959fb0a694e`.
+ECAPA reported a `NaN` gradient norm at batch 4 and infinity at batch 8;
+RawNet3 reported `NaN` at batches 4, 8, 16, and 24; WavLM+MHFA reported
+infinity at batch 4. The original gate called `GradScaler.step`, but did not
+prove that GradScaler actually applied the update. Consequently those records
+showed allocation capacity, not a successful full optimizer step.
+
+Schema 2 corrects this by starting from a conservative dynamic scale, backing
+off for up to eight attempts, requiring finite loss and pre-clipping gradient
+norm, and verifying an exact target-head parameter change. A standalone
+dependency-free validator rejects old schemas and all non-finite or skipped
+steps. The rejected archive remains locally recoverable but is not accepted
+experiment evidence and is not committed.
 
 ## Advantages
 
