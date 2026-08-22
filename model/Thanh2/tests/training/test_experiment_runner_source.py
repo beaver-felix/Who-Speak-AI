@@ -46,6 +46,26 @@ def test_runner_has_no_test_scoring_or_threshold_selection() -> None:
     assert "select_threshold" not in source
 
 
+def test_run_validator_checks_all_evidence_boundaries() -> None:
+    """Downloaded runs must be authenticated without unsafe checkpoint loads."""
+    source = (PROJECT_ROOT / "scripts/validate_training_run.py").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "read_resolved_config",
+        "parse_constant=_reject_json_constant",
+        "validation_trial_list_sha256",
+        "validation_epoch_",
+        "checkpoint_sha256",
+        "_sha256_file(checkpoint)",
+        "metrics.jsonl",
+        "Pilot membership must contain 512 speakers and utterances",
+    ):
+        assert required in source
+    assert "torch.load" not in source
+
+
 @pytest.mark.parametrize(
     ("stage", "speaker_limit", "tracking_mode"),
     (("pilot", 512, "offline"), ("full", 0, "online")),

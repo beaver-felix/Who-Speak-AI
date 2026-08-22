@@ -889,7 +889,10 @@ The new pipeline must address these limitations or document why a limitation rem
   and epoch memberships receive SHA-256 fingerprints.
 - Fresh/resume state is explicit. Test remains excluded from training, early
   stopping, model selection, and threshold selection.
-- The local regression suite contains 215 passing tests. Real pilot evidence
+- Downloaded runs must pass `scripts/validate_training_run.py`, which verifies
+  config, summary, Validation, checkpoint-sidecar, and JSONL evidence without
+  loading executable checkpoint contents.
+- The local regression suite contains 216 passing tests. Real pilot evidence
   is pending.
 - Methodology decision:
   `docs/decisions/014_initial_training_experiment_matrix.md`.

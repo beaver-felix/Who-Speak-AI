@@ -84,10 +84,13 @@ shuffle because its audio is stored as separate WAV files.
 - `scripts/train_experiment.py` authenticates the resolved config, reconstructs
   and fingerprints the complete canonical manifest, regenerates and verifies
   the immutable Validation trial list, and assembles the shared runtime.
+- `scripts/validate_training_run.py` authenticates downloaded summaries,
+  per-epoch Validation artifacts, checkpoint sidecar hashes, and local logs
+  without deserializing a checkpoint.
 - Fresh and resumed runs fail closed on ambiguous state. Checkpoints bind model,
   dataset, config SHA-256, manifest SHA-256, seed, and optimizer groups.
 - Each final run summary records deterministic per-epoch membership hashes.
-- The local regression suite contains 215 passing tests. Real pilot evidence is
+- The local regression suite contains 216 passing tests. Real pilot evidence is
   still required before any full run begins.
 
 ## Advantages
