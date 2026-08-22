@@ -12,6 +12,9 @@ checkpoint_compatibility = "passed"
 [model.configuration_status]
 training_recipe = "initial_screening_candidate_pending_validation"
 
+[model.runtime]
+reflection_padding = "deterministic_slice_flip_concat_equivalent"
+
 [optimization]
 name = "adam"
 trainable_scope = "complete_encoder_and_new_head"

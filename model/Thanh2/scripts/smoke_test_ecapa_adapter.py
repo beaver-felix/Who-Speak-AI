@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ def write_json(payload: dict[str, Any], output_path: Path) -> None:
 def main() -> None:
     """Load pinned artifacts and verify inference plus gradient flow."""
     arguments = parse_arguments()
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
     # Delayed imports keep local data/config tests independent of PyTorch.
     import torch
@@ -50,6 +52,8 @@ def main() -> None:
 
     if not torch.cuda.is_available() and arguments.device.startswith("cuda"):
         raise RuntimeError("CUDA was requested but is not available.")
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
 
     adapter = EcapaTdnnAdapter.from_pretrained(
         cache_dir=arguments.cache_dir,
@@ -108,6 +112,9 @@ def main() -> None:
         and all(bool(torch.isfinite(gradient).all()) for gradient in parameter_gradients),
         "encoder_parameter_gradient_nonzero": bool(parameter_gradients)
         and any(bool(torch.count_nonzero(gradient)) for gradient in parameter_gradients),
+        "strict_deterministic_algorithms_enabled": (
+            torch.are_deterministic_algorithms_enabled()
+        ),
     }
     if not all(checks.values()):
         raise RuntimeError(f"ECAPA adapter smoke checks failed: {checks}")

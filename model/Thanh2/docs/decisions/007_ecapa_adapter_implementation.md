@@ -116,6 +116,29 @@ This establishes pinned-source loading, adapter shape compatibility,
 deterministic inference, and fine-tuning gradient flow. It does not establish
 TidyVoice or ViMD accuracy and must not be reported as a benchmark result.
 
+## Strict-Determinism Training Correction
+
+The first real TidyVoice pilot failed before its first optimizer step on
+2026-08-22. PyTorch `2.10.0+cu128` reported that
+`reflection_pad1d_backward_out_cuda` has no deterministic implementation while
+strict deterministic algorithms were enabled. Earlier adapter and multi-batch
+gates had not enabled that strict runtime flag, so they proved gradient flow but
+did not exercise this boundary.
+
+The accepted correction does not use `warn_only=True` and does not change the
+padding mode. During one adapter forward call, one-dimensional reflection
+padding is expressed with forward-equivalent tensor slices, flips, and
+concatenation. Native `torch.nn.functional.pad` remains in use for every other
+mode and dimensionality, and the original function is restored in a `finally`
+block. A process lock protects the temporary scoped replacement. This preserves
+the pretrained reflection-padding semantics while providing a deterministic
+autograd graph on CUDA.
+
+The corrected adapter must rerun its real GPU gradient gate with
+`torch.use_deterministic_algorithms(True)` before the pilot is resumed. Until
+that gate passes, the correction is implementation-ready but not empirically
+accepted.
+
 ## Advantages
 
 - Uses the official pinned architecture and checkpoint loader.
@@ -131,6 +154,9 @@ TidyVoice or ViMD accuracy and must not be reported as a benchmark result.
 - The official source classifier must be downloaded for loader compatibility
   even though it is discarded afterward.
 - Concrete behavior cannot be tested in the lightweight local environment.
+- The deterministic reflection implementation temporarily replaces PyTorch's
+  functional pad entry point under a process lock; the runner therefore keeps
+  one model-forward thread per process.
 - Full fine-tuning may exceed a selected memory budget; freezing policy,
   precision, crop duration, batch size, and accumulation remain unresolved.
 - L2-normalized embeddings are suitable for cosine/AAM-style objectives, but

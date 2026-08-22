@@ -7,8 +7,10 @@ tests that run without PyTorch.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 try:
@@ -42,6 +44,76 @@ _REQUIRED_ARTIFACTS = (
     "label_encoder.txt",
     "example1.wav",
 )
+_FUNCTIONAL_PAD_LOCK = RLock()
+
+
+def deterministic_reflection_pad1d(
+    inputs: torch.Tensor,
+    padding: tuple[int, int] | list[int],
+) -> torch.Tensor:
+    """Apply reflection padding with slice/flip/concatenate operations.
+
+    PyTorch 2.10's native CUDA reflection-pad backward is nondeterministic and
+    therefore raises under strict deterministic algorithms. This expression is
+    forward-equivalent but its gradient is composed only of deterministic
+    slicing, flipping, concatenation, and elementwise accumulation.
+    """
+    if len(padding) != 2:
+        raise ModelAdapterError("ECAPA reflection padding must be one-dimensional.")
+    left, right = padding
+    if (
+        isinstance(left, bool)
+        or isinstance(right, bool)
+        or not isinstance(left, int)
+        or not isinstance(right, int)
+        or left < 0
+        or right < 0
+    ):
+        raise ModelAdapterError("ECAPA reflection padding values must be non-negative.")
+    input_length = int(inputs.shape[-1])
+    if left >= input_length or right >= input_length:
+        raise ModelAdapterError(
+            "ECAPA reflection padding must be smaller than its input length."
+        )
+    if left == 0 and right == 0:
+        return inputs
+    pieces = []
+    if left:
+        pieces.append(inputs[..., 1 : left + 1].flip(-1))
+    pieces.append(inputs)
+    if right:
+        pieces.append(inputs[..., -(right + 1) : -1].flip(-1))
+    return torch.cat(pieces, dim=-1)
+
+
+@contextmanager
+def _deterministic_reflection_padding() -> Any:
+    """Scope the equivalent pad implementation to one ECAPA forward call.
+
+    SpeechBrain calls ``torch.nn.functional.pad`` from both its feature and
+    TDNN layers. The adapter is intentionally single-device and single-threaded;
+    a process lock prevents overlapping calls from observing the temporary
+    function replacement.
+    """
+    with _FUNCTIONAL_PAD_LOCK:
+        native_pad = functional.pad
+
+        def deterministic_pad(
+            inputs: torch.Tensor,
+            padding: tuple[int, ...] | list[int],
+            mode: str = "constant",
+            value: float | None = None,
+        ) -> torch.Tensor:
+            """Route only one-dimensional reflection mode to the safe form."""
+            if mode == "reflect" and len(padding) == 2:
+                return deterministic_reflection_pad1d(inputs, padding)
+            return native_pad(inputs, padding, mode=mode, value=value)
+
+        functional.pad = deterministic_pad
+        try:
+            yield
+        finally:
+            functional.pad = native_pad
 
 
 class EcapaTdnnAdapter(torch.nn.Module):
@@ -192,9 +264,10 @@ class EcapaTdnnAdapter(torch.nn.Module):
 
         # This reproduces SpeechBrain 1.1.0 EncoderClassifier.encode_batch
         # without the source VoxCeleb classifier or inference-only wrapper.
-        features = self.compute_features(waveforms.float())
-        features = self.mean_var_norm(features, lengths)
-        embeddings = self.embedding_model(features, lengths)
+        with _deterministic_reflection_padding():
+            features = self.compute_features(waveforms.float())
+            features = self.mean_var_norm(features, lengths)
+            embeddings = self.embedding_model(features, lengths)
         if embeddings.ndim != 3 or embeddings.shape[1:] != (
             1,
             self.metadata.embedding_dim,

@@ -90,8 +90,14 @@ shuffle because its audio is stored as separate WAV files.
 - Fresh and resumed runs fail closed on ambiguous state. Checkpoints bind model,
   dataset, config SHA-256, manifest SHA-256, seed, and optimizer groups.
 - Each final run summary records deterministic per-epoch membership hashes.
-- The local regression suite contains 216 passing tests. Real pilot evidence is
+- The local regression suite contains 219 passing tests. Real pilot evidence is
   still required before any full run begins.
+
+The first ECAPA-TDNN/TidyVoice pilot attempt failed closed before its first
+optimizer step because native CUDA reflection-padding backward is unavailable
+under strict deterministic algorithms. Decision 007 records the
+forward-equivalent deterministic padding correction. This rejected attempt
+contains no accepted training or evaluation result.
 
 ## Advantages
 

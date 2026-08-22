@@ -892,7 +892,22 @@ The new pipeline must address these limitations or document why a limitation rem
 - Downloaded runs must pass `scripts/validate_training_run.py`, which verifies
   config, summary, Validation, checkpoint-sidecar, and JSONL evidence without
   loading executable checkpoint contents.
-- The local regression suite contains 216 passing tests. Real pilot evidence
+- The local regression suite contains 219 passing tests. Real pilot evidence
   is pending.
 - Methodology decision:
   `docs/decisions/014_initial_training_experiment_matrix.md`.
+
+## ECAPA Strict-Determinism Correction - 2026-08-22
+
+- The first real ECAPA-TDNN/TidyVoice pilot attempt failed before optimizer
+  step one because PyTorch `2.10.0+cu128` has no deterministic native CUDA
+  backward for one-dimensional reflection padding.
+- The failed attempt is rejected and contains no accepted model or metric.
+- `warn_only=True` is prohibited. Reflection mode must remain unchanged.
+- The adapter uses a scoped, forward-equivalent slice/flip/concatenate
+  reflection pad whose autograd path is deterministic; every other pad call
+  remains native.
+- The real ECAPA GPU gradient gate must run with strict deterministic
+  algorithms and pass again before retrying the pilot.
+- Detailed record:
+  `docs/decisions/007_ecapa_adapter_implementation.md`.
