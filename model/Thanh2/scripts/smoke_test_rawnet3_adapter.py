@@ -71,11 +71,16 @@ def main() -> None:
         num_samples=RAWNET3_EVALUATION_SAMPLES,
         segment_count=1,
     )[0]
-    training_segment = evenly_spaced_segments(
+    training_segments = evenly_spaced_segments(
         audio.waveform,
         num_samples=RAWNET3_TRAIN_SAMPLES,
-        segment_count=1,
-    )[0]
+        segment_count=2,
+    )
+    if training_segments.shape[0] != 2:
+        raise RuntimeError(
+            "RawNet3 gradient smoke test requires a recording long enough "
+            "to provide two distinct 48,240-sample crops."
+        )
 
     adapter = RawNet3Adapter.from_pretrained(
         cache_dir=arguments.cache_dir,
@@ -94,13 +99,13 @@ def main() -> None:
 
     adapter.train()
     adapter.zero_grad(set_to_none=True)
-    # Batch size two ensures every training-mode BatchNorm layer receives more
-    # than one pooled value. The crop length is the official 300-frame recipe:
+    # Two distinct endpoint crops ensure the pooled BatchNorm receives real
+    # between-example variation. Duplicating one crop can make the symmetric
+    # loss's input gradient cancel exactly even though parameter gradients are
+    # valid. The crop length is the official 300-frame recipe:
     # 300 * 160 + 240 = 48,240 waveform samples.
     gradient_waveform = (
-        torch.from_numpy(training_segment)
-        .unsqueeze(0)
-        .repeat(2, 1)
+        torch.from_numpy(training_segments)
         .to(arguments.device)
         .requires_grad_(True)
     )

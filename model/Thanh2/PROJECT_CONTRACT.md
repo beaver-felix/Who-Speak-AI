@@ -652,8 +652,10 @@ The new pipeline must address these limitations or document why a limitation rem
 - RawNet3 batches require equal fixed crops; supplied relative lengths must all
   equal 1.
 - The Kaggle compatibility gate uses the official recipe-derived 48,240-sample
-  training and 64,240-sample evaluation crops. These do not yet select the
-  final comparison configuration.
+  training and 64,240-sample evaluation crops. Gradient validation uses two
+  distinct training-crop endpoints so pooled BatchNorm does not cancel the
+  symmetric input gradient. These settings do not yet select the final
+  comparison configuration.
 - Status remains pending until real TidyVoice inference, deterministic repeat,
   parameter count, checkpoint identity, and input/encoder gradient checks pass
   on the Kaggle T4 and the JSON artifact is reviewed.

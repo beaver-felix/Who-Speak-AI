@@ -88,7 +88,8 @@ TidyVoice recording and require:
 - a 64,240-sample real-speech crop produces shape `[1, 256]`
 - every embedding value is finite and the L2 norm equals 1 within tolerance
 - repeated evaluation cosine similarity is at least 0.99999
-- a batch of two 48,240-sample crops produces finite, non-zero input gradients
+- two distinct endpoint 48,240-sample crops produce finite, non-zero input
+  gradients without symmetric BatchNorm cancellation
 - at least one encoder parameter gradient is present, finite, and non-zero
 - structured JSON evidence is saved and reviewed
 
