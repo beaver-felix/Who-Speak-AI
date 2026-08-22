@@ -1,6 +1,6 @@
 # Decision 005: Shared Verification Trial Protocol
 
-Status: Accepted  
+Status: Accepted
 Date: 2026-08-22
 
 ## Context

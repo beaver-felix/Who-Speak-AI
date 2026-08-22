@@ -1,0 +1,5 @@
+# Keep research artifacts byte-stable across Windows and Kaggle Linux.
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
