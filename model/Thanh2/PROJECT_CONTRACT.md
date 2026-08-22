@@ -758,7 +758,7 @@ The new pipeline must address these limitations or document why a limitation rem
     `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The current local regression suite contains 161 passing tests.
+- The current local regression suite contains 166 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
 
@@ -817,7 +817,11 @@ The new pipeline must address these limitations or document why a limitation rem
   strict resume semantics so Kaggle restarts do not create duplicate runs.
 - Early-stopping constants, epoch budget, scheduler, augmentation, and
   validation-crop settings remain pending predeclared screening experiments.
-- The local suite contains 161 passing tests. A real Kaggle CUDA checkpoint
+- The local suite contains 166 passing tests. A real Kaggle CUDA checkpoint
   interruption/resume equivalence gate is still required before epoch runs.
+- The pending gate is implemented by
+  `scripts/smoke_test_checkpoint_resume.py`; downloaded evidence must pass
+  `scripts/validate_checkpoint_resume.py` before acceptance. It compares 14
+  exact checkpoint, cursor, metric, state, GradScaler, and RNG-output checks.
 - Methodology decision:
   `docs/decisions/012_restart_safe_epoch_training_lifecycle.md`.

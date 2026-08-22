@@ -54,3 +54,24 @@ def test_wandb_logger_uses_explicit_run_identity_and_resume_policy() -> None:
     assert "id=run_id" in source
     assert 'resume="must" if resume else "never"' in source
     assert "allow_nan=False" in source
+
+
+def test_cuda_resume_gate_rebuilds_and_compares_complete_state() -> None:
+    """The empirical gate must exercise a real interruption boundary."""
+    source = (
+        PROJECT_ROOT / "scripts/smoke_test_checkpoint_resume.py"
+    ).read_text(encoding="utf-8")
+
+    for required in (
+        "save_training_checkpoint",
+        "del adapter, objective, optimizer, scaler",
+        "restore_training_checkpoint",
+        "restored.cursor != saved_cursor",
+        "adapter_state_exact",
+        "objective_state_exact",
+        "optimizer_state_exact",
+        "scaler_state_exact",
+        "rng_dependent_embedding_exact",
+        "torch.use_deterministic_algorithms(True)",
+    ):
+        assert required in source

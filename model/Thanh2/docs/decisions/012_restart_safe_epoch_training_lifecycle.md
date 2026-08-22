@@ -52,7 +52,7 @@ WavLM+MHFA with these invariants:
 - The dependency-free lifecycle, logging contract, Kaggle-only checkpoint
   implementation, and shared epoch engine are implemented under
   `src/speaker_recognition/training/`.
-- The full local regression suite passes `161` tests.
+- The full local regression suite passes `166` tests.
 - Tests prove deterministic epoch membership, exact resume suffixes, weighted
   partial-batch metrics, EER/minDCF selection, patience behavior, finite logs,
   monotonic global steps, and required safe-checkpoint source boundaries.
@@ -85,4 +85,14 @@ WavLM+MHFA with these invariants:
 On Kaggle, train a small deterministic fixture, save after a non-final batch,
 restore into newly constructed model/optimizer/scaler objects, finish the next
 step, and compare model/head parameters, optimizer/scaler state, cursor,
-  metrics, and RNG-dependent outputs against an uninterrupted control run.
+metrics, and RNG-dependent outputs against an uninterrupted control run.
+
+The executable protocol is
+`scripts/smoke_test_checkpoint_resume.py`. It uses a small dropout-bearing CUDA
+adapter and the production AAM-Softmax head, AdamW, FP16 GradScaler, lifecycle
+cursor, and atomic checkpoint functions. It deletes the uninterrupted runtime
+objects before constructing and restoring the resumed runtime. Fourteen exact
+checks compare the second-step metrics, complete component state hashes,
+cursor, checkpoint/sidecar hashes, and dropout-dependent embedding hash. The
+downloaded JSON must pass `scripts/validate_checkpoint_resume.py` locally
+before the gate status changes to accepted.
