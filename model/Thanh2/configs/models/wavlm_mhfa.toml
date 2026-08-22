@@ -1,0 +1,29 @@
+[model]
+name = "wavlm_mhfa"
+source_id = "theolepage/wavlm_ssl_sv"
+revision = "bfb8527de83b5347fb81b1e9e31be241656ca103"
+embedding_dim = 256
+initialization = "wavlm_base_plus"
+
+[model.architecture]
+wavlm_layers = 12
+wavlm_hidden_dim = 768
+mhfa_parameter_count = 2302554
+total_parameter_count = 96684490
+
+[model.audit]
+wavlm_parameter_count = 94381936
+wavlm_checkpoint_sha256 = "fcbcf2a94def92e90e086bb0727275d53b75a9c0e483e2abfa560ac951986b6d"
+strict_checkpoint_compatibility = "passed"
+
+[model.reference_recipe]
+training_frames = 300
+evaluation_frames = 400
+aam_softmax_margin = 0.2
+aam_softmax_scale = 30
+transformer_learning_rate = 0.00002
+mhfa_learning_rate = 0.005
+epochs = 15
+
+[model.configuration_status]
+training_recipe = "reference_only_pending_validation"

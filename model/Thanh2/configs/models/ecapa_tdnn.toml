@@ -1,0 +1,13 @@
+[model]
+name = "ecapa_tdnn"
+source_id = "speechbrain/spkrec-ecapa-voxceleb"
+revision = "0f99f2d0ebe89ac095bcc5903c4dd8f72b367286"
+embedding_dim = 192
+initialization = "pretrained_speaker_encoder"
+
+[model.audit]
+parameter_count = 20767552
+checkpoint_compatibility = "passed"
+
+[model.configuration_status]
+training_recipe = "pending_validation"

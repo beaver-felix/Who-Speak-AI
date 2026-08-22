@@ -577,3 +577,30 @@ The new pipeline must address these limitations or document why a limitation rem
   `89f71c9354a6fd3760284348d9d3277a7acb68175f274e4ae07288b35eb785e5`.
 - Methodology decision:
   `docs/decisions/005_verification_trial_protocol.md`.
+
+## Accepted Configuration and Dataset Boundary — 2026-08-22
+
+- Experiment configuration uses ordered standard-library TOML layers: shared
+  base, dataset, model, then explicit existing-key overrides.
+- Resolved configurations are validated, serialized to stable JSON, and
+  fingerprinted by SHA-256 for W&B and checkpoint provenance.
+- Accepted preprocessing, metric, and trial controls cannot be changed by an
+  experiment override without validation failure.
+- Dataset files record audited sources, storage, protocol artifacts, and
+  counts; model files record pinned sources, revisions, dimensions, and
+  compatibility evidence.
+- Untested training hyperparameters remain explicitly pending; audited
+  reference-recipe values are not automatically treated as selected settings.
+- One map-style dataset interface lazily loads TidyVoice WAV files or ViMD
+  Parquet bytes and produces identical NumPy sample/batch structures.
+- Training uses fixed crops and stable contiguous speaker indexes. Evaluation
+  flattens deterministic crops and preserves utterance boundaries with offsets.
+- PyTorch is deliberately not a package dependency, preventing replacement of
+  Kaggle's CUDA-matched build; runtime code will convert contiguous NumPy
+  batches with `torch.from_numpy`.
+- Persistent DataLoader workers remain disabled until epoch state is explicitly
+  synchronized, because otherwise workers can reuse stale crop epochs.
+- All six dataset/model configuration combinations and the shared file/Parquet
+  data paths are covered by the 88-test local regression suite.
+- Methodology decision:
+  `docs/decisions/006_layered_configuration_and_dataset_interface.md`.

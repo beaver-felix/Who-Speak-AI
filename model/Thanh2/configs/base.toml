@@ -1,0 +1,28 @@
+schema_version = 1
+
+[experiment]
+seed = 42
+stage = "smoke"
+
+[audio]
+sample_rate = 16000
+amplitude_normalization = "none"
+channel_policy = "arithmetic_mean"
+resampler = "scipy_resample_poly"
+
+[loader]
+persistent_workers = false
+selection_status = "required_until_epoch_aware_worker_sync"
+
+[verification]
+seed = 42
+max_genuine_per_speaker = 20
+impostor_trials_per_split = 100000
+
+[metrics]
+far_targets = [0.05, 0.01, 0.001, 0.0001]
+
+[metrics.min_dcf]
+p_target = 0.01
+c_miss = 1.0
+c_false_alarm = 1.0
