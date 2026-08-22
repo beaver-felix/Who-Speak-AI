@@ -15,6 +15,8 @@ def test_engine_preserves_required_safety_boundaries() -> None:
 
     for required in (
         "DeterministicEpochBatchSampler",
+        "DeterministicGroupedEpochBatchSampler",
+        "groups_by_path",
         "dataset.set_epoch",
         "persistent_workers=False",
         "torch.amp.GradScaler",

@@ -9,6 +9,7 @@ from speaker_recognition.data.manifest import (
     ManifestRecord,
     ManifestValidationError,
     Split,
+    manifest_sha256,
     validate_manifest,
 )
 
@@ -143,3 +144,29 @@ def test_manifest_rejects_recording_leakage() -> None:
         match="Cross-split recording leakage",
     ):
         validate_manifest(records)
+
+
+def test_manifest_hash_tracks_ordered_model_references() -> None:
+    """Checkpoint identity must change with canonical record order or location."""
+    first = make_record("utt-1", "speaker-1", "rec-1", Split.TRAIN)
+    second = make_record("utt-2", "speaker-2", "rec-2", Split.TRAIN)
+    relocated = make_record(
+        "utt-2",
+        "speaker-2",
+        "rec-2",
+        Split.TRAIN,
+        audio_path="new/utt-2.wav",
+    )
+
+    fingerprint = manifest_sha256((first, second))
+
+    assert len(fingerprint) == 64
+    assert manifest_sha256((first, second)) == fingerprint
+    assert manifest_sha256((second, first)) != fingerprint
+    assert manifest_sha256((first, relocated)) != fingerprint
+
+
+def test_manifest_hash_rejects_empty_input() -> None:
+    """An empty fingerprint must not satisfy checkpoint identity."""
+    with pytest.raises(ManifestValidationError, match="empty manifest"):
+        manifest_sha256(())

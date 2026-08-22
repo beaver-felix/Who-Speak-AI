@@ -24,7 +24,13 @@ from speaker_recognition.data.manifest import (
     ManifestRecord,
     ManifestValidationError,
     Split,
+    manifest_sha256,
     validate_manifest,
+)
+from speaker_recognition.data.sampling import (
+    EpochSamplingError,
+    select_speaker_capped_epoch,
+    utterance_id_sha256,
 )
 from speaker_recognition.data.segments import (
     SegmentError,
@@ -41,6 +47,7 @@ __all__ = [
     "EvaluationBatch",
     "EvaluationSample",
     "EvaluationSpeakerDataset",
+    "EpochSamplingError",
     "ManifestRecord",
     "ManifestValidationError",
     "ParquetAudioReader",
@@ -55,7 +62,10 @@ __all__ = [
     "collate_training_samples",
     "evenly_spaced_segments",
     "load_audio_file",
+    "manifest_sha256",
     "random_fixed_segment",
     "stable_segment_seed",
+    "select_speaker_capped_epoch",
+    "utterance_id_sha256",
     "validate_manifest",
 ]

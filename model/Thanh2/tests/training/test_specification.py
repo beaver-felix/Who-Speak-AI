@@ -38,9 +38,43 @@ def _resolved_values(model_name: str = "ecapa_tdnn") -> dict[str, object]:
         }
     return {
         "model": {"name": model_name},
+        "loader": {"group_by_audio_path": False},
+        "evaluation": {
+            "segment_samples": (
+                64_240 if model_name in {"rawnet3", "wavlm_mhfa"} else 48_000
+            ),
+            "segment_count": 1,
+            "utterance_batch_size": 2,
+            "num_workers": 0,
+            "pin_memory": True,
+            "mixed_precision": "fp16",
+            "validation_frequency_epochs": 1,
+        },
         "training": {
             "mixed_precision": "fp16",
             "gradient_clip_norm": 5.0,
+            "audio": {
+                "segment_samples": (
+                    48_240
+                    if model_name in {"rawnet3", "wavlm_mhfa"}
+                    else 48_000
+                )
+            },
+            "epoch_sampling": {
+                "name": "deterministic_speaker_cap",
+                "max_utterances_per_speaker": 1,
+                "max_speakers_per_epoch": 512,
+                "selection_status": "accepted_balance_and_runtime_control",
+            },
+            "lifecycle": {
+                "max_epochs": 1,
+                "early_stopping_patience": 1,
+                "minimum_eer_improvement": 0.001,
+                "checkpoint_every_steps": 100,
+                "num_workers": 0,
+                "pin_memory": True,
+                "initial_loss_scale": 1024.0,
+            },
             "batch": {
                 "size": 6 if model_name == "wavlm_mhfa" else 24,
                 "calibrated_largest_passing_size": (

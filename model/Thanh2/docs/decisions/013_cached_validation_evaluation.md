@@ -58,7 +58,7 @@ Each Validation artifact contains:
 5. extraction wall/model timing and derived throughput; and
 6. canonical split, epoch, segment duration, and segment count.
 
-The local regression suite contains 198 passing tests. It validates numerical
+The local regression suite contains 215 passing tests. It validates numerical
 aggregation, cache integrity, cosine scoring, trial fingerprints, complete
 metrics, threshold provenance, strict serialization, Validation-only source
 boundaries, deterministic extraction settings, and the CUDA-event latency
@@ -115,5 +115,5 @@ Accepted artifact SHA-256 values:
   expensive for WavLM+MHFA.
 - Model-only CUDA latency is reproducible but does not represent end-to-end
   virtual-assistant response time; that must be measured separately.
-- Segment duration, crop count, and Validation frequency remain experiment
-  variables that must be selected before final training.
+- Complete per-epoch Validation increases runtime; the initial pilot/full crop
+  counts are predeclared in Decision 014 and remain hypotheses until evaluated.

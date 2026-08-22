@@ -160,6 +160,109 @@ class OptimizationSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class EpochSamplingSpec:
+    """Describe the deterministic per-speaker epoch exposure policy."""
+
+    max_utterances_per_speaker: int
+    max_speakers_per_epoch: int | None
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, Any]) -> "EpochSamplingSpec":
+        """Require the accepted rotating SHA-256 speaker cap."""
+        if values.get("name") != "deterministic_speaker_cap":
+            raise TrainingSpecificationError(
+                "training.epoch_sampling.name must be "
+                "'deterministic_speaker_cap'."
+            )
+        if values.get("selection_status") != (
+            "accepted_balance_and_runtime_control"
+        ):
+            raise TrainingSpecificationError(
+                "Epoch sampling must retain its accepted status."
+            )
+        max_speakers = _non_negative_integer(
+            values,
+            "max_speakers_per_epoch",
+        )
+        return cls(
+            max_utterances_per_speaker=_positive_integer(
+                values,
+                "max_utterances_per_speaker",
+            ),
+            # Zero is the explicit configuration representation of no cap.
+            max_speakers_per_epoch=max_speakers or None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LifecycleSpec:
+    """Describe one bounded, checkpointed training lifecycle."""
+
+    max_epochs: int
+    early_stopping_patience: int
+    minimum_eer_improvement: float
+    checkpoint_every_steps: int
+    num_workers: int
+    pin_memory: bool
+    initial_loss_scale: float
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, Any]) -> "LifecycleSpec":
+        """Validate runtime limits and exact-resume controls."""
+        return cls(
+            max_epochs=_positive_integer(values, "max_epochs"),
+            early_stopping_patience=_positive_integer(
+                values,
+                "early_stopping_patience",
+            ),
+            minimum_eer_improvement=_non_negative_float(
+                values,
+                "minimum_eer_improvement",
+            ),
+            checkpoint_every_steps=_positive_integer(
+                values,
+                "checkpoint_every_steps",
+            ),
+            num_workers=_non_negative_integer(values, "num_workers"),
+            pin_memory=_boolean(values, "pin_memory"),
+            initial_loss_scale=_positive_float(values, "initial_loss_scale"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationSpec:
+    """Describe deterministic Validation crops and extraction loading."""
+
+    segment_samples: int
+    segment_count: int
+    utterance_batch_size: int
+    num_workers: int
+    pin_memory: bool
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, Any]) -> "EvaluationSpec":
+        """Require the accepted FP16 every-epoch Validation boundary."""
+        if values.get("mixed_precision") != "fp16":
+            raise TrainingSpecificationError(
+                "evaluation.mixed_precision must equal 'fp16'."
+            )
+        if values.get("validation_frequency_epochs") != 1:
+            raise TrainingSpecificationError(
+                "Validation must run after every completed epoch."
+            )
+        return cls(
+            segment_samples=_positive_integer(values, "segment_samples"),
+            segment_count=_positive_integer(values, "segment_count"),
+            utterance_batch_size=_positive_integer(
+                values,
+                "utterance_batch_size",
+            ),
+            num_workers=_non_negative_integer(values, "num_workers"),
+            pin_memory=_boolean(values, "pin_memory"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TrainingSpecification:
     """Join the shared loss contract to one architecture update policy."""
 
@@ -168,6 +271,11 @@ class TrainingSpecification:
     optimization: OptimizationSpec
     mixed_precision: str
     gradient_clip_norm: float
+    training_segment_samples: int
+    epoch_sampling: EpochSamplingSpec
+    lifecycle: LifecycleSpec
+    evaluation: EvaluationSpec
+    group_by_audio_path: bool
 
     @classmethod
     def from_resolved_config(
@@ -197,6 +305,23 @@ class TrainingSpecification:
             gradient_clip_norm=_positive_float(
                 training,
                 "gradient_clip_norm",
+            ),
+            training_segment_samples=_positive_integer(
+                _mapping(training, "audio"),
+                "segment_samples",
+            ),
+            epoch_sampling=EpochSamplingSpec.from_mapping(
+                _mapping(training, "epoch_sampling")
+            ),
+            lifecycle=LifecycleSpec.from_mapping(
+                _mapping(training, "lifecycle")
+            ),
+            evaluation=EvaluationSpec.from_mapping(
+                _mapping(config, "evaluation")
+            ),
+            group_by_audio_path=_boolean(
+                _mapping(config, "loader"),
+                "group_by_audio_path",
             ),
         )
 
@@ -249,4 +374,22 @@ def _positive_integer(values: Mapping[str, Any], key: str) -> int:
     value = values.get(key)
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise TrainingSpecificationError(f"{key} must be a positive integer.")
+    return value
+
+
+def _non_negative_integer(values: Mapping[str, Any], key: str) -> int:
+    """Read one strict integer greater than or equal to zero."""
+    value = values.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise TrainingSpecificationError(
+            f"{key} must be a non-negative integer."
+        )
+    return value
+
+
+def _boolean(values: Mapping[str, Any], key: str) -> bool:
+    """Read one required boolean value."""
+    value = values.get(key)
+    if not isinstance(value, bool):
+        raise TrainingSpecificationError(f"{key} must be boolean.")
     return value

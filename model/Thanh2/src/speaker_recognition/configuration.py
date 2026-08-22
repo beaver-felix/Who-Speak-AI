@@ -102,7 +102,11 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
         raise ConfigurationError("schema_version must equal 1.")
 
     _require_non_negative_integer(config, "experiment.seed")
-    _require_non_empty_text(config, "experiment.stage")
+    stage = _require_non_empty_text(config, "experiment.stage")
+    if stage not in {"unselected", "pilot", "full"}:
+        raise ConfigurationError(
+            "experiment.stage must be unselected, pilot, or full."
+        )
 
     sample_rate = _require_positive_integer(config, "audio.sample_rate")
     if sample_rate != 16000:
@@ -173,6 +177,32 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
             "loader.persistent_workers must remain false until epoch state is "
             "synchronized with persistent worker copies."
         )
+    group_by_audio_path = _read_dotted_path(
+        config,
+        "loader.group_by_audio_path",
+    )
+    if not isinstance(group_by_audio_path, bool):
+        raise ConfigurationError(
+            "loader.group_by_audio_path must be boolean."
+        )
+    expected_grouping = storage == "parquet"
+    if group_by_audio_path is not expected_grouping:
+        raise ConfigurationError(
+            "Parquet data requires shard-aware ordering; file data must use "
+            "the ordinary epoch shuffle."
+        )
+
+    expected_reproducibility = {
+        "deterministic_algorithms": True,
+        "cudnn_benchmark": False,
+        "cublas_workspace_config": ":4096:8",
+    }
+    if _read_dotted_path(config, "reproducibility") != (
+        expected_reproducibility
+    ):
+        raise ConfigurationError(
+            "reproducibility must match the accepted deterministic T4 policy."
+        )
 
     # Decision 010 fixes the comparison objective. Architecture-specific
     # optimizer groups remain explicit model-layer policy and are validated by
@@ -215,9 +245,53 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
     )
 
     try:
-        TrainingSpecification.from_resolved_config(config)
+        specification = TrainingSpecification.from_resolved_config(config)
     except TrainingSpecificationError as error:
         raise ConfigurationError(f"Invalid training specification: {error}") from error
+
+    schedule = _read_dotted_path(config, "training.schedule")
+    if schedule != {
+        "name": "constant",
+        "selection_status": "pilot_control_pending_validation",
+    }:
+        raise ConfigurationError(
+            "The initial controlled experiment requires a constant schedule."
+        )
+    tracking = _read_dotted_path(config, "tracking")
+    if not isinstance(tracking, Mapping):
+        raise ConfigurationError("tracking must be a table.")
+    _require_non_empty_text(config, "tracking.project")
+    tracking_mode = _read_dotted_path(config, "tracking.mode")
+    if tracking_mode not in {"online", "offline"}:
+        raise ConfigurationError("tracking.mode must be online or offline.")
+
+    if stage == "pilot":
+        if (
+            specification.epoch_sampling.max_utterances_per_speaker != 1
+            or specification.epoch_sampling.max_speakers_per_epoch != 512
+            or specification.lifecycle.max_epochs != 1
+            or specification.lifecycle.early_stopping_patience != 1
+            or specification.evaluation.segment_count != 1
+            or tracking_mode != "offline"
+        ):
+            raise ConfigurationError(
+                "Pilot stage must use 512 speakers, one utterance each, one "
+                "epoch, patience one, one Validation crop, and offline "
+                "tracking."
+            )
+    elif stage == "full":
+        if (
+            specification.epoch_sampling.max_utterances_per_speaker != 4
+            or specification.epoch_sampling.max_speakers_per_epoch is not None
+            or specification.lifecycle.max_epochs != 15
+            or specification.lifecycle.early_stopping_patience != 3
+            or specification.evaluation.segment_count != 2
+            or tracking_mode != "online"
+        ):
+            raise ConfigurationError(
+                "Full stage must use the declared 4-utterance cap, 15 epochs, "
+                "patience three, two Validation crops, and online tracking."
+            )
 
 
 def write_resolved_config(
@@ -236,6 +310,59 @@ def write_resolved_config(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
         newline="\n",
+    )
+
+
+def read_resolved_config(path: str | Path) -> ResolvedConfig:
+    """Load and authenticate one previously fingerprinted JSON configuration."""
+    source = Path(path).expanduser().resolve()
+    if not source.is_file():
+        raise ConfigurationError(
+            f"Resolved configuration does not exist: {source}"
+        )
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigurationError("Resolved configuration JSON is invalid.") from error
+    if not isinstance(payload, Mapping):
+        raise ConfigurationError(
+            "Resolved configuration root must be an object."
+        )
+    config = payload.get("config")
+    source_layers = payload.get("source_layers")
+    expected_sha256 = payload.get("config_sha256")
+    if not isinstance(config, Mapping):
+        raise ConfigurationError("Resolved configuration is missing config.")
+    if (
+        not isinstance(source_layers, list)
+        or not source_layers
+        or any(
+            not isinstance(layer, str) or not layer.strip()
+            for layer in source_layers
+        )
+    ):
+        raise ConfigurationError(
+            "Resolved configuration requires non-empty source layers."
+        )
+    canonical_json = json.dumps(
+        config,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    actual_sha256 = hashlib.sha256(
+        canonical_json.encode("utf-8")
+    ).hexdigest()
+    if expected_sha256 != actual_sha256:
+        raise ConfigurationError(
+            "Resolved configuration SHA-256 does not match its contents."
+        )
+    validate_experiment_config(config)
+    return ResolvedConfig(
+        _canonical_json=canonical_json,
+        source_paths=tuple(source_layers),
+        sha256=actual_sha256,
     )
 
 

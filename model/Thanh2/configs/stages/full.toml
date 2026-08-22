@@ -1,0 +1,17 @@
+[experiment]
+stage = "full"
+
+[training.epoch_sampling]
+max_utterances_per_speaker = 4
+max_speakers_per_epoch = 0
+
+[training.lifecycle]
+max_epochs = 15
+early_stopping_patience = 3
+checkpoint_every_steps = 500
+
+[evaluation]
+segment_count = 2
+
+[tracking]
+mode = "online"

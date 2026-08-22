@@ -29,6 +29,7 @@ from speaker_recognition.training.checkpointing import (
 )
 from speaker_recognition.training.lifecycle import (
     DeterministicEpochBatchSampler,
+    DeterministicGroupedEpochBatchSampler,
     EarlyStoppingPolicy,
     EpochSummary,
     TrainingCursor,
@@ -58,6 +59,7 @@ class TrainerSettings:
     num_workers: int = 2
     pin_memory: bool = True
     initial_loss_scale: float = 1024.0
+    group_by_audio_path: bool = False
 
     def __post_init__(self) -> None:
         """Reject settings that could create an empty or unsafe run."""
@@ -87,6 +89,8 @@ class TrainerSettings:
                 raise ValueError(f"{field_name} must be finite and positive.")
         if not isinstance(self.pin_memory, bool):
             raise ValueError("pin_memory must be boolean.")
+        if not isinstance(self.group_by_audio_path, bool):
+            raise ValueError("group_by_audio_path must be boolean.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,14 +230,30 @@ class SpeakerTrainingEngine:
     ) -> None:
         """Train the deterministic suffix identified by the current cursor."""
         self.dataset.set_epoch(self.cursor.epoch_index)
-        sampler = DeterministicEpochBatchSampler(
-            dataset_size=len(self.dataset),
-            batch_size=self.settings.batch_size,
-            seed=self.identity.seed,
-            epoch_index=self.cursor.epoch_index,
-            start_batch_index=self.cursor.next_batch_index,
-            drop_last=False,
-        )
+        if self.settings.group_by_audio_path:
+            groups_by_path: dict[str, list[int]] = {}
+            for index, record in enumerate(self.dataset.epoch_records):
+                groups_by_path.setdefault(record.audio_path, []).append(index)
+            sampler = DeterministicGroupedEpochBatchSampler(
+                index_groups=tuple(
+                    tuple(groups_by_path[path])
+                    for path in sorted(groups_by_path)
+                ),
+                batch_size=self.settings.batch_size,
+                seed=self.identity.seed,
+                epoch_index=self.cursor.epoch_index,
+                start_batch_index=self.cursor.next_batch_index,
+                drop_last=False,
+            )
+        else:
+            sampler = DeterministicEpochBatchSampler(
+                dataset_size=len(self.dataset),
+                batch_size=self.settings.batch_size,
+                seed=self.identity.seed,
+                epoch_index=self.cursor.epoch_index,
+                start_batch_index=self.cursor.next_batch_index,
+                drop_last=False,
+            )
         # DataLoader iterator construction otherwise consumes global torch RNG,
         # perturbing dropout after a mid-epoch resume. A private generator keeps
         # worker seeding separate from model RNG state.

@@ -8,6 +8,8 @@ without extracting or duplicating the underlying audio.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -221,6 +223,38 @@ def validate_manifest(
         )
 
     return snapshot
+
+
+def manifest_sha256(records: Iterable[ManifestRecord]) -> str:
+    """Hash ordered model identities and physical audio references.
+
+    The field order exactly matches the accepted ViMD protocol fingerprint.
+    Callers must first construct records in their canonical deterministic order.
+    """
+    snapshot = tuple(records)
+    if not snapshot:
+        raise ManifestValidationError("Cannot hash an empty manifest.")
+    digest = hashlib.sha256()
+    for record in snapshot:
+        canonical_fields = (
+            record.dataset,
+            record.source_split,
+            record.split.value,
+            record.utterance_id,
+            record.speaker_id,
+            record.recording_id,
+            record.audio_storage.value,
+            record.audio_path,
+            record.audio_row_index,
+        )
+        encoded = json.dumps(
+            canonical_fields,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        digest.update(encoded)
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _validate_group_disjointness(

@@ -230,6 +230,85 @@ class DeterministicEpochBatchSampler:
             yield indices[start : min(start + self.batch_size, stop)]
 
 
+class DeterministicGroupedEpochBatchSampler:
+    """Shuffle storage groups and their rows while keeping groups contiguous.
+
+    ViMD stores audio in large Parquet shards. Globally shuffling individual
+    rows would repeatedly evict the one-row-group cache. This sampler shuffles
+    both group order and rows inside each group, concatenates them, and then
+    forms ordinary batches. Only a boundary batch can span two shards.
+    """
+
+    def __init__(
+        self,
+        *,
+        index_groups: Sequence[Sequence[int]],
+        batch_size: int,
+        seed: int,
+        epoch_index: int,
+        start_batch_index: int = 0,
+        drop_last: bool = False,
+    ) -> None:
+        """Validate an exact partition of contiguous dataset indexes."""
+        if not index_groups or any(not group for group in index_groups):
+            raise TrainingLifecycleError(
+                "index_groups must contain non-empty groups."
+            )
+        materialized = tuple(tuple(group) for group in index_groups)
+        flattened = [index for group in materialized for index in group]
+        if any(
+            isinstance(index, bool) or not isinstance(index, int)
+            for index in flattened
+        ):
+            raise TrainingLifecycleError("Grouped indexes must be integers.")
+        if sorted(flattened) != list(range(len(flattened))):
+            raise TrainingLifecycleError(
+                "Grouped indexes must partition contiguous dataset indexes."
+            )
+
+        self._groups = materialized
+        self._delegate = DeterministicEpochBatchSampler(
+            dataset_size=len(flattened),
+            batch_size=batch_size,
+            seed=seed,
+            epoch_index=epoch_index,
+            start_batch_index=start_batch_index,
+            drop_last=drop_last,
+        )
+        self.batch_size = batch_size
+        self.seed = seed
+        self.epoch_index = epoch_index
+        self.start_batch_index = start_batch_index
+        self.drop_last = drop_last
+        self.total_batches = self._delegate.total_batches
+
+    def __len__(self) -> int:
+        """Return the number of unconsumed batches."""
+        return len(self._delegate)
+
+    def __iter__(self) -> Iterator[list[int]]:
+        """Yield the exact resume suffix of the shard-local epoch order."""
+        generator = random.Random(
+            _grouped_epoch_shuffle_seed(self.seed, self.epoch_index)
+        )
+        groups = [list(group) for group in self._groups]
+        generator.shuffle(groups)
+        for group in groups:
+            generator.shuffle(group)
+        indices = [index for group in groups for index in group]
+        stop = (
+            self.total_batches * self.batch_size
+            if self.drop_last
+            else len(indices)
+        )
+        for batch_index in range(
+            self.start_batch_index,
+            self.total_batches,
+        ):
+            start = batch_index * self.batch_size
+            yield indices[start : min(start + self.batch_size, stop)]
+
+
 def record_training_batch(
     cursor: TrainingCursor,
     *,
@@ -335,6 +414,12 @@ def validate_epoch_history(
 def _epoch_shuffle_seed(seed: int, epoch_index: int) -> int:
     """Derive a stable private shuffle seed from run and epoch identity."""
     payload = f"{seed}\0{epoch_index}\0epoch-order-v1".encode("utf-8")
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
+
+
+def _grouped_epoch_shuffle_seed(seed: int, epoch_index: int) -> int:
+    """Derive a private seed for shard-aware ordering."""
+    payload = f"{seed}\0{epoch_index}\0grouped-epoch-order-v1".encode("utf-8")
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
 
 

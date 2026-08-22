@@ -33,6 +33,7 @@ from speaker_recognition.data.segments import (
     random_fixed_segment,
     stable_segment_seed,
 )
+from speaker_recognition.data.sampling import select_speaker_capped_epoch
 
 
 class SpeakerDatasetError(ValueError):
@@ -203,6 +204,8 @@ class TrainingSpeakerDataset:
         seed: int,
         target_sample_rate: int = 16000,
         speaker_to_index: Mapping[str, int] | None = None,
+        max_utterances_per_speaker: int | None = None,
+        max_speakers_per_epoch: int | None = None,
     ) -> None:
         """Validate records and build a stable speaker classification map."""
         _require_positive_integer(segment_samples, "segment_samples")
@@ -229,11 +232,24 @@ class TrainingSpeakerDataset:
         )
         self._segment_samples = segment_samples
         self._seed = seed
+        if max_utterances_per_speaker is not None:
+            _require_positive_integer(
+                max_utterances_per_speaker,
+                "max_utterances_per_speaker",
+            )
+        self._max_utterances_per_speaker = max_utterances_per_speaker
+        if max_speakers_per_epoch is not None:
+            _require_positive_integer(
+                max_speakers_per_epoch,
+                "max_speakers_per_epoch",
+            )
+        self._max_speakers_per_epoch = max_speakers_per_epoch
         self._epoch = 0
+        self._epoch_records = self._select_epoch_records()
 
     def __len__(self) -> int:
         """Return canonical training utterance count."""
-        return len(self._records)
+        return len(self._epoch_records)
 
     def __getitem__(self, index: int) -> TrainingSample:
         """Load and crop one utterance deterministically for the current epoch."""
@@ -264,8 +280,13 @@ class TrainingSpeakerDataset:
 
     @property
     def records(self) -> tuple[ManifestRecord, ...]:
-        """Return the deterministic canonical record order."""
+        """Return every canonical Train record before epoch capping."""
         return self._records
+
+    @property
+    def epoch_records(self) -> tuple[ManifestRecord, ...]:
+        """Return the deterministic membership selected for this epoch."""
+        return self._epoch_records
 
     @property
     def epoch(self) -> int:
@@ -276,11 +297,24 @@ class TrainingSpeakerDataset:
         """Select the non-negative epoch used by deterministic crop seeds."""
         _require_non_negative_integer(epoch, "epoch")
         self._epoch = epoch
+        self._epoch_records = self._select_epoch_records()
 
     def _record_at(self, index: int) -> ManifestRecord:
         """Read a record using strict integer indexing."""
-        _validate_index(index, len(self._records))
-        return self._records[index]
+        _validate_index(index, len(self._epoch_records))
+        return self._epoch_records[index]
+
+    def _select_epoch_records(self) -> tuple[ManifestRecord, ...]:
+        """Apply the optional restart-exact per-speaker exposure cap."""
+        if self._max_utterances_per_speaker is None:
+            return self._records
+        return select_speaker_capped_epoch(
+            self._records,
+            max_utterances_per_speaker=self._max_utterances_per_speaker,
+            max_speakers=self._max_speakers_per_epoch,
+            seed=self._seed,
+            epoch_index=self._epoch,
+        )
 
 
 class EvaluationSpeakerDataset:

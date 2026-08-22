@@ -6,6 +6,7 @@ import pytest
 
 from speaker_recognition.training.lifecycle import (
     DeterministicEpochBatchSampler,
+    DeterministicGroupedEpochBatchSampler,
     EarlyStoppingPolicy,
     TrainingCursor,
     TrainingLifecycleError,
@@ -65,6 +66,56 @@ def test_drop_last_is_explicit_and_deterministic() -> None:
 
     assert [len(batch) for batch in batches] == [4, 4]
     assert len({index for batch in batches for index in batch}) == 8
+
+
+def test_grouped_epoch_keeps_storage_groups_contiguous() -> None:
+    """Shard-local ordering should preserve full coverage and cache locality."""
+    groups = ((0, 1, 2), (3, 4), (5, 6, 7, 8, 9))
+    sampler = DeterministicGroupedEpochBatchSampler(
+        index_groups=groups,
+        batch_size=4,
+        seed=42,
+        epoch_index=0,
+    )
+
+    batches = list(sampler)
+    flattened = [index for batch in batches for index in batch]
+
+    assert sorted(flattened) == list(range(10))
+    assert [len(batch) for batch in batches] == [4, 4, 2]
+    for group in groups:
+        positions = sorted(flattened.index(index) for index in group)
+        assert positions == list(range(positions[0], positions[-1] + 1))
+
+
+def test_grouped_epoch_resume_matches_complete_suffix() -> None:
+    """Shard-aware ordering must retain the same exact checkpoint cursor rule."""
+    settings = {
+        "index_groups": ((0, 1, 2), (3, 4), (5, 6, 7, 8, 9)),
+        "batch_size": 4,
+        "seed": 42,
+        "epoch_index": 3,
+    }
+    complete = list(DeterministicGroupedEpochBatchSampler(**settings))
+    resumed = list(
+        DeterministicGroupedEpochBatchSampler(
+            **settings,
+            start_batch_index=1,
+        )
+    )
+
+    assert resumed == complete[1:]
+
+
+def test_grouped_epoch_rejects_incomplete_index_partition() -> None:
+    """Missing or duplicate indexes could silently corrupt an epoch."""
+    with pytest.raises(TrainingLifecycleError, match="partition"):
+        DeterministicGroupedEpochBatchSampler(
+            index_groups=((0, 1), (1, 2)),
+            batch_size=2,
+            seed=42,
+            epoch_index=0,
+        )
 
 
 def test_cursor_accumulates_weighted_batch_metrics() -> None:

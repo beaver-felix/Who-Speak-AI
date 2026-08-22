@@ -868,3 +868,28 @@ The new pipeline must address these limitations or document why a limitation rem
     `16f5ba7e2f6c6b23a072bf6d99383e3089664edc2a26e7c71e6376e34061bed1`.
 - Methodology decision:
   `docs/decisions/013_cached_validation_evaluation.md`.
+
+## Initial Training Experiment Matrix - 2026-08-22
+
+- All six model-by-dataset experiments use one shared authenticated runner.
+- Every experiment must pass a one-epoch pilot before its full run starts.
+- A pilot uses 512 deterministic Train speakers, one utterance each, the full
+  target classifier, one Validation crop, offline W&B, and checkpointing every
+  100 successful steps. Pilot metrics are integration evidence only.
+- A full epoch includes every Train speaker and up to four deterministic,
+  rotating utterances per speaker. Full runs use at most 15 epochs, patience 3,
+  minimum EER improvement `0.001`, two Validation crops, online W&B, and
+  checkpointing every 500 successful steps.
+- Initial training uses a constant learning rate. Optimizer values remain
+  source-informed candidates pending target Validation evidence and are not
+  described as optimal.
+- ViMD uses deterministic shard-grouped batching to preserve its one-row-group
+  cache; TidyVoice uses the ordinary deterministic epoch shuffle.
+- Resolved configurations, canonical manifests, immutable Validation trials,
+  and epoch memberships receive SHA-256 fingerprints.
+- Fresh/resume state is explicit. Test remains excluded from training, early
+  stopping, model selection, and threshold selection.
+- The local regression suite contains 215 passing tests. Real pilot evidence
+  is pending.
+- Methodology decision:
+  `docs/decisions/014_initial_training_experiment_matrix.md`.
