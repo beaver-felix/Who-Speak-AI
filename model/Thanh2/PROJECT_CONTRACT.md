@@ -605,7 +605,7 @@ The new pipeline must address these limitations or document why a limitation rem
 - Methodology decision:
   `docs/decisions/006_layered_configuration_and_dataset_interface.md`.
 
-## ECAPA Adapter Implementation Gate — 2026-08-22
+## Accepted ECAPA Adapter — 2026-08-22
 
 - A framework-neutral embedding-adapter contract is implemented for all three
   model families.
@@ -622,7 +622,12 @@ The new pipeline must address these limitations or document why a limitation rem
   dependency declarations to protect CUDA compatibility.
 - The dependency-free local suite contains 96 passing tests and the concrete
   ECAPA module passes syntax compilation.
-- Acceptance remains pending a Kaggle T4 test proving real-speech inference,
-  deterministic repeat, and finite non-zero input/encoder gradients.
-- Proposed methodology record:
+- Kaggle T4 evidence passed with shape `[1, 192]`, L2 norm 1.0, repeat
+  cosine similarity 1.0, and finite non-zero input and encoder gradients.
+- Evidence artifact: `results/model_audit/ecapa_adapter_smoke.json`.
+- Artifact SHA-256:
+  `2409df41e4d7e1fde356cb1bc5da3ee1d4330754ab420f3e4b7a1287d73baa2b`.
+- This is compatibility and trainability evidence, not TidyVoice or ViMD
+  benchmark performance.
+- Accepted methodology record:
   `docs/decisions/007_ecapa_adapter_implementation.md`.

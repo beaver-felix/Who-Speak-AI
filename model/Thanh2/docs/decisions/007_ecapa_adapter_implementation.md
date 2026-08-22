@@ -1,6 +1,6 @@
 # Decision 007: ECAPA-TDNN Adapter Implementation
 
-Status: Pending Kaggle GPU evidence
+Status: Accepted
 Date: 2026-08-22
 
 ## Context
@@ -65,7 +65,7 @@ The concrete ECAPA module imports these dependencies only when requested.
 Local configuration, data, metric, and adapter-contract tests therefore remain
 usable without installing a large CPU-only or incompatible PyTorch wheel.
 
-## Evidence Required Before Acceptance
+## Acceptance Gate
 
 Run `scripts/smoke_test_ecapa_adapter.py` on a Kaggle Tesla T4 and require:
 
@@ -79,9 +79,42 @@ Run `scripts/smoke_test_ecapa_adapter.py` on a Kaggle Tesla T4 and require:
 - at least one encoder parameter gradient is finite and non-zero
 - structured JSON evidence is saved and reviewed
 
-The local dependency-free regression suite currently contains 96 passing
-tests. This decision remains pending because local tests cannot execute the
-concrete PyTorch/SpeechBrain adapter.
+The local dependency-free regression suite contains 96 passing tests. Concrete
+PyTorch/SpeechBrain behavior was evaluated separately on the pinned Kaggle
+runtime.
+
+## Kaggle GPU Evidence
+
+The acceptance gate passed on `cuda:0` with:
+
+- GPU class: Tesla T4
+- PyTorch: `2.10.0+cu128`
+- CUDA build: `12.8`
+- SpeechBrain: `1.1.0`
+- Resolved model revision:
+  `0f99f2d0ebe89ac095bcc5903c4dd8f72b367286`
+- Adapter parameters: 20,767,552
+- Trainable adapter parameters: 20,767,552
+- Real sample: official `example1.wav`, 52,173 samples, 3.2608125 seconds
+- Output shape: `[1, 192]`
+- Output L2 norm: 1.0
+- Repeat cosine similarity: 1.0
+- Embedding shape and finiteness: passed
+- Input gradient finite and non-zero: passed
+- Encoder gradient present, finite, and non-zero: passed
+
+Waveform SHA-256:
+`48aedc3a10b14b49ebe8da2efd1dd91cbe7dbbaf58278732e7fdb04f6d6cc1e9`
+
+Evidence artifact:
+`results/model_audit/ecapa_adapter_smoke.json`
+
+Artifact SHA-256:
+`2409df41e4d7e1fde356cb1bc5da3ee1d4330754ab420f3e4b7a1287d73baa2b`
+
+This establishes pinned-source loading, adapter shape compatibility,
+deterministic inference, and fine-tuning gradient flow. It does not establish
+TidyVoice or ViMD accuracy and must not be reported as a benchmark result.
 
 ## Advantages
 
