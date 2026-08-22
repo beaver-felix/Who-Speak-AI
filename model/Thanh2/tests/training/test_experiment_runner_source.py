@@ -35,14 +35,18 @@ def test_runner_sets_determinism_before_importing_torch() -> None:
         assert required in source
 
 
-def test_runner_has_no_test_scoring_or_threshold_selection() -> None:
-    """Training-time model selection must remain Validation-only."""
+def test_runner_runs_test_only_after_validation_selected_training() -> None:
+    """Test must follow fit and use the best Validation checkpoint/threshold."""
     source = (PROJECT_ROOT / "scripts/train_experiment.py").read_text(
         encoding="utf-8"
     )
 
-    assert "split=Split.TEST" not in source
-    assert "security_threshold" not in source
+    assert source.index("outcome = engine.fit(") < source.index(
+        "final_test = _run_final_test("
+    )
+    assert "split=Split.TEST" in source
+    assert 'threshold_name = "threshold_at_far_0p1pct"' in source
+    assert "engine.resume_from(best_checkpoint)" in source
     assert "select_threshold" not in source
 
 
@@ -61,6 +65,8 @@ def test_run_validator_checks_all_evidence_boundaries() -> None:
         "_sha256_file(checkpoint)",
         "metrics.jsonl",
         "Pilot membership must contain 512 speakers and utterances",
+        "Final Test did not use the authenticated best checkpoint",
+        "frozen_validation_security_threshold",
     ):
         assert required in source
     assert "torch.load" not in source
@@ -68,7 +74,11 @@ def test_run_validator_checks_all_evidence_boundaries() -> None:
 
 @pytest.mark.parametrize(
     ("stage", "speaker_limit", "tracking_mode"),
-    (("pilot", 512, "offline"), ("full", 0, "online")),
+    (
+        ("pilot", 512, "offline"),
+        ("resource_constrained", 0, "offline"),
+        ("full", 0, "online"),
+    ),
 )
 def test_prepare_script_writes_six_authenticated_configs(
     tmp_path: Path,
@@ -94,3 +104,21 @@ def test_prepare_script_writes_six_authenticated_configs(
             "training.epoch_sampling.max_speakers_per_epoch"
         ) == speaker_limit
         assert resolved.get("tracking.mode") == tracking_mode
+
+
+def test_resource_worker_uses_one_process_per_gpu_and_archives_evidence() -> None:
+    """The shareable worker must isolate datasets across both Kaggle GPUs."""
+    source = (
+        PROJECT_ROOT / "scripts/run_resource_constrained_worker.py"
+    ).read_text(encoding="utf-8")
+
+    for required in (
+        "torch.cuda.device_count() < 2",
+        'f"cuda:{gpu_index}"',
+        "subprocess.Popen(",
+        "--resume",
+        "validate_training_run.py",
+        "ZIP_STORED",
+        "RESOURCE-CONSTRAINED WORKER COMPLETE",
+    ):
+        assert required in source

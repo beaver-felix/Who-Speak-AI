@@ -103,9 +103,10 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
 
     _require_non_negative_integer(config, "experiment.seed")
     stage = _require_non_empty_text(config, "experiment.stage")
-    if stage not in {"unselected", "pilot", "full"}:
+    if stage not in {"unselected", "pilot", "resource_constrained", "full"}:
         raise ConfigurationError(
-            "experiment.stage must be unselected, pilot, or full."
+            "experiment.stage must be unselected, pilot, "
+            "resource_constrained, or full."
         )
 
     sample_rate = _require_positive_integer(config, "audio.sample_rate")
@@ -278,6 +279,20 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
                 "Pilot stage must use 512 speakers, one utterance each, one "
                 "epoch, patience one, one Validation crop, and offline "
                 "tracking."
+            )
+    elif stage == "resource_constrained":
+        if (
+            specification.epoch_sampling.max_utterances_per_speaker != 1
+            or specification.epoch_sampling.max_speakers_per_epoch is not None
+            or specification.lifecycle.max_epochs != 3
+            or specification.lifecycle.early_stopping_patience != 1
+            or specification.evaluation.segment_count != 1
+            or tracking_mode != "offline"
+        ):
+            raise ConfigurationError(
+                "Resource-constrained stage must use every speaker, one "
+                "utterance per speaker, three epochs, patience one, one "
+                "evaluation crop, and offline tracking."
             )
     elif stage == "full":
         if (

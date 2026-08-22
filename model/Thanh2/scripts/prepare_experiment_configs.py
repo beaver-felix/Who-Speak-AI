@@ -13,7 +13,7 @@ from speaker_recognition.configuration import (
 
 DATASETS = ("tidyvoice", "vimd")
 MODELS = ("ecapa_tdnn", "rawnet3", "wavlm_mhfa")
-STAGES = ("pilot", "full")
+STAGES = ("pilot", "resource_constrained", "full")
 
 
 def parse_arguments() -> argparse.Namespace:

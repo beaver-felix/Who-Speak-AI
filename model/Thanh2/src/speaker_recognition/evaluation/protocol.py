@@ -55,7 +55,10 @@ class CachedEvaluationResult:
             "threshold_policy": {
                 "decision_threshold_source": self.decision_threshold_source,
                 "accept_rule": "cosine_score_greater_than_or_equal_threshold",
-                "security_threshold_selected": False,
+                "security_threshold_selected": (
+                    self.decision_threshold_source
+                    == "frozen_validation_security_threshold"
+                ),
             },
             "metrics": self.metrics.to_flat_dict(),
             "min_dcf_configuration": {

@@ -166,24 +166,177 @@ def _expected_trial_sha256(
     project_root: Path,
     *,
     dataset_name: str,
+    split: Split = Split.VALIDATION,
 ) -> str:
-    """Read the immutable canonical Validation trial fingerprint."""
+    """Read one immutable canonical Validation or Test trial fingerprint."""
     payload = _load_json(
         project_root / "results/data_audit/verification_trial_protocols.json"
     )
     try:
-        value = payload["protocols"][dataset_name]["validation"][
+        value = payload["protocols"][dataset_name][split.value][
             "trial_list_sha256"
         ]
     except (KeyError, TypeError) as error:
         raise ExperimentAssemblyError(
-            "Canonical Validation trial fingerprint is missing."
+            f"Canonical {split.value} trial fingerprint is missing."
         ) from error
     if not isinstance(value, str) or len(value) != 64:
         raise ExperimentAssemblyError(
-            "Canonical Validation trial fingerprint is invalid."
+            f"Canonical {split.value} trial fingerprint is invalid."
         )
     return value
+
+
+def _run_final_test(
+    *,
+    adapter: Any,
+    engine: Any,
+    best_checkpoint: Path,
+    manifest: tuple[ManifestRecord, ...],
+    dataset_root: Path,
+    dataset_name: str,
+    project_root: Path,
+    run_directory: Path,
+    config: Mapping[str, Any],
+    config_sha256: str,
+    manifest_fingerprint: str,
+    best_epoch_index: int,
+    device: str,
+) -> Mapping[str, object]:
+    """Evaluate Test once with the best Validation-selected checkpoint.
+
+    The security operating threshold is selected exclusively from the best
+    epoch's Validation trials at FAR <= 0.1%, frozen, and then applied to Test.
+    Restoring through the exact-resume boundary authenticates checkpoint
+    identity and loads the adapter state with ``weights_only=True``.
+    """
+    from speaker_recognition.data.dataset import EvaluationSpeakerDataset
+    from speaker_recognition.evaluation.protocol import evaluate_embedding_table
+    from speaker_recognition.evaluation.runtime import (
+        ExtractionSettings,
+        extract_utterance_embeddings,
+    )
+
+    checkpoint_sha256 = engine.resume_from(best_checkpoint)
+    validation_path = (
+        run_directory
+        / "validation"
+        / f"validation_epoch_{best_epoch_index:04d}.json"
+    )
+    validation = _load_json(validation_path)
+    validation_metrics = validation.get("metrics")
+    if not isinstance(validation_metrics, Mapping):
+        raise ExperimentAssemblyError(
+            "Best-epoch Validation metrics are missing."
+        )
+    threshold_name = "threshold_at_far_0p1pct"
+    threshold_value = validation_metrics.get(threshold_name)
+    if (
+        isinstance(threshold_value, bool)
+        or not isinstance(threshold_value, (int, float))
+        or not np.isfinite(float(threshold_value))
+    ):
+        raise ExperimentAssemblyError(
+            "Best Validation FAR 0.1% threshold is not finite."
+        )
+    frozen_threshold = float(threshold_value)
+
+    verification = config["verification"]
+    test_trials = build_verification_trials(
+        manifest,
+        split=Split.TEST,
+        seed=int(verification["seed"]),
+        max_genuine_per_speaker=int(
+            verification["max_genuine_per_speaker"]
+        ),
+        impostor_trial_count=int(
+            verification["impostor_trials_per_split"]
+        ),
+    )
+    expected_test_fingerprint = _expected_trial_sha256(
+        project_root,
+        dataset_name=dataset_name,
+        split=Split.TEST,
+    )
+    if trial_list_sha256(test_trials) != expected_test_fingerprint:
+        raise ExperimentAssemblyError(
+            "Regenerated Test trials differ from the committed protocol."
+        )
+    test_ids = {
+        utterance_id
+        for trial in test_trials
+        for utterance_id in (
+            trial.left_utterance_id,
+            trial.right_utterance_id,
+        )
+    }
+    test_records = tuple(
+        record for record in manifest if record.utterance_id in test_ids
+    )
+    evaluation = config["evaluation"]
+    test_dataset = EvaluationSpeakerDataset(
+        test_records,
+        split=Split.TEST,
+        dataset_roots={dataset_name: dataset_root},
+        segment_samples=int(evaluation["segment_samples"]),
+        segment_count=int(evaluation["segment_count"]),
+    )
+    table, extraction = extract_utterance_embeddings(
+        adapter,
+        test_dataset,
+        settings=ExtractionSettings(
+            utterance_batch_size=int(evaluation["utterance_batch_size"]),
+            num_workers=int(evaluation["num_workers"]),
+            pin_memory=bool(evaluation["pin_memory"]),
+        ),
+        device=device,
+    )
+    result = evaluate_embedding_table(
+        table,
+        test_trials,
+        expected_trial_sha256=expected_test_fingerprint,
+        decision_threshold=frozen_threshold,
+    )
+    artifact: dict[str, object] = {
+        **result.to_artifact(),
+        "evaluation": {
+            "partition": Split.TEST.value,
+            "segment_samples": test_dataset.segment_samples,
+            "segment_count": test_dataset.segment_count,
+            "embedding_extraction": extraction.to_dict(),
+        },
+        "selection": {
+            "checkpoint": "checkpoints/best.pt",
+            "checkpoint_sha256": checkpoint_sha256,
+            "best_validation_epoch_index": best_epoch_index,
+            "threshold_partition": Split.VALIDATION.value,
+            "threshold_metric": threshold_name,
+            "frozen_threshold": frozen_threshold,
+            "validation_artifact": str(
+                validation_path.relative_to(run_directory).as_posix()
+            ),
+        },
+        "context": {
+            "stage": str(config["experiment"]["stage"]),
+            "model_name": str(config["model"]["name"]),
+            "dataset_name": dataset_name,
+            "config_sha256": config_sha256,
+            "manifest_sha256": manifest_fingerprint,
+            "seed": int(config["experiment"]["seed"]),
+        },
+    }
+    output_path = run_directory / "final_test.json"
+    _write_json(output_path, artifact)
+    return {
+        "artifact": "final_test.json",
+        "checkpoint_sha256": checkpoint_sha256,
+        "trial_list_sha256": expected_test_fingerprint,
+        "trial_count": len(test_trials),
+        "trial_utterance_count": len(test_dataset),
+        "best_validation_epoch_index": best_epoch_index,
+        "frozen_validation_threshold": frozen_threshold,
+        "metrics": result.metrics.to_flat_dict(),
+    }
 
 
 def _write_json(path: Path, payload: Mapping[str, object]) -> None:
@@ -230,9 +383,10 @@ def main() -> None:
     resolved = read_resolved_config(arguments.config)
     config = resolved.to_dict()
     stage = str(config["experiment"]["stage"])
-    if stage not in {"pilot", "full"}:
+    if stage not in {"pilot", "resource_constrained", "full"}:
         raise ExperimentAssemblyError(
-            "Training requires an explicit pilot or full stage layer."
+            "Training requires an explicit pilot, resource-constrained, or "
+            "full stage layer."
         )
 
     reproducibility = config["reproducibility"]
@@ -492,6 +646,30 @@ def main() -> None:
         logger=CompositeRunLogger((local_logger, wandb_logger)),
     )
 
+    final_test: Mapping[str, object] | None = None
+    if stage in {"resource_constrained", "full"}:
+        best_epoch_index = outcome.cursor.best_epoch_index
+        if best_epoch_index is None:
+            raise ExperimentAssemblyError(
+                "Completed training did not select a best Validation epoch."
+            )
+        print("RUNNING FINAL TEST WITH FROZEN VALIDATION THRESHOLD")
+        final_test = _run_final_test(
+            adapter=adapter,
+            engine=engine,
+            best_checkpoint=best_checkpoint,
+            manifest=manifest,
+            dataset_root=dataset_root,
+            dataset_name=dataset_name,
+            project_root=project_root,
+            run_directory=run_directory,
+            config=config,
+            config_sha256=resolved.sha256,
+            manifest_fingerprint=manifest_fingerprint,
+            best_epoch_index=best_epoch_index,
+            device=arguments.device,
+        )
+
     epoch_memberships = []
     for completed_epoch in range(len(outcome.history)):
         training_dataset.set_epoch(completed_epoch)
@@ -530,6 +708,7 @@ def main() -> None:
             "history": [entry.to_dict() for entry in outcome.history],
             "stopped_early": outcome.stopped_early,
         },
+        "final_test": final_test,
         "runtime": {
             "device": arguments.device,
             "device_name": torch.cuda.get_device_name(arguments.device),

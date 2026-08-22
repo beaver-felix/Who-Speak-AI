@@ -100,7 +100,13 @@ def iter_tidyvoice_audio_paths(
                 language_path.iterdir(),
                 key=lambda path: path.name,
             ):
-                if not audio_path.is_file() or audio_path.suffix.lower() != ".wav":
+                # TidyVoice is a read-only, previously audited Kaggle mount.
+                # Calling ``is_file`` here performs one remote metadata lookup
+                # per utterance (321,711 calls) and can take longer than a
+                # training pilot.  The directory entries and WAV-only layout
+                # were independently audited; the suffix check still rejects
+                # unexpected content without repeating those remote stats.
+                if audio_path.suffix.lower() != ".wav":
                     raise TidyVoicePathError(
                         f"Unexpected file in TidyVoice audio directory: "
                         f"{audio_path}"
@@ -182,20 +188,21 @@ def iter_tidyvoice_manifest_records(
     TidyVoicePathError
         If assignments are missing, unexpected, or use an invalid split.
     """
-    _validate_tidyvoice_dev_assignments(dataset_root, dev_assignments)
+    resolved_root = Path(dataset_root).expanduser().resolve()
+    _validate_tidyvoice_dev_assignments(resolved_root, dev_assignments)
 
     for audio_path in iter_tidyvoice_audio_paths(
-        dataset_root,
+        resolved_root,
         source_split="train",
     ):
-        yield parse_tidyvoice_audio_path(
+        yield _parse_discovered_tidyvoice_audio_path(
             audio_path,
-            dataset_root=dataset_root,
+            dataset_root=resolved_root,
             split=Split.TRAIN,
         )
 
     yield from _iter_tidyvoice_dev_records_unchecked(
-        dataset_root,
+        resolved_root,
         dev_assignments=dev_assignments,
     )
 
@@ -210,9 +217,10 @@ def iter_tidyvoice_dev_records(
     This avoids scanning the much larger source Train branch when preparing
     verification trials or evaluation-only artifacts.
     """
-    _validate_tidyvoice_dev_assignments(dataset_root, dev_assignments)
+    resolved_root = Path(dataset_root).expanduser().resolve()
+    _validate_tidyvoice_dev_assignments(resolved_root, dev_assignments)
     yield from _iter_tidyvoice_dev_records_unchecked(
-        dataset_root,
+        resolved_root,
         dev_assignments=dev_assignments,
     )
 
@@ -266,11 +274,69 @@ def _iter_tidyvoice_dev_records_unchecked(
         source_split="dev",
     ):
         speaker_id = f"tidyvoice:{audio_path.parent.parent.name}"
-        yield parse_tidyvoice_audio_path(
+        yield _parse_discovered_tidyvoice_audio_path(
             audio_path,
             dataset_root=dataset_root,
             split=dev_assignments[speaker_id],
         )
+
+
+def _parse_discovered_tidyvoice_audio_path(
+    audio_path: Path,
+    *,
+    dataset_root: str | Path,
+    split: Split,
+) -> ManifestRecord:
+    """Parse a path already validated by the canonical directory scanner.
+
+    Unlike the public defensive parser, this hot path never calls
+    :meth:`Path.resolve` for each utterance.  Dataset and branch roots were
+    resolved once by :func:`iter_tidyvoice_audio_paths`, so lexical
+    ``relative_to`` is sufficient and avoids hundreds of thousands of remote
+    filesystem metadata operations on Kaggle.
+    """
+    # The caller resolves this root exactly once before entering the hot loop.
+    root = Path(dataset_root)
+    relative_path = audio_path.relative_to(root)
+    parts = relative_path.parts
+    if len(parts) != 5:
+        raise TidyVoicePathError(
+            "Expected five path components below the TidyVoice root, "
+            f"but received {len(parts)}: {relative_path.as_posix()}"
+        )
+
+    branch = (parts[0], parts[1])
+    source_split = _BRANCH_TO_SOURCE_SPLIT.get(branch)
+    if source_split is None:
+        raise TidyVoicePathError(
+            f"Unsupported TidyVoice branch: {'/'.join(branch)}"
+        )
+    if split not in _ALLOWED_CANONICAL_SPLITS[source_split]:
+        raise TidyVoicePathError(
+            f"Invalid canonical split {split.value!r} for source split "
+            f"{source_split!r}."
+        )
+
+    speaker_name, language = parts[2], parts[3]
+    utterance_stem = audio_path.stem
+    if not speaker_name.startswith("id") or not language or not utterance_stem:
+        raise TidyVoicePathError(
+            f"Invalid discovered TidyVoice path: {relative_path.as_posix()}"
+        )
+    utterance_id = ":".join(
+        ("tidyvoice", source_split, speaker_name, language, utterance_stem)
+    )
+    return ManifestRecord(
+        dataset="tidyvoice",
+        source_split=source_split,
+        split=split,
+        utterance_id=utterance_id,
+        speaker_id=f"tidyvoice:{speaker_name}",
+        recording_id=utterance_id,
+        audio_storage=AudioStorage.FILE,
+        audio_path=relative_path.as_posix(),
+        language=language,
+    )
 
 
 def _format_bounded_examples(

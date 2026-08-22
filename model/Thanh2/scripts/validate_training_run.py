@@ -191,16 +191,88 @@ def validate_training_run(run_directory: Path) -> Mapping[str, Any]:
             "Validation metrics contain a non-finite value.",
         )
 
+    checkpoint_hashes: dict[str, str] = {}
     for checkpoint_name in ("last.pt", "best.pt"):
         checkpoint = root / "checkpoints" / checkpoint_name
         sidecar = _load_json(checkpoint.with_name(checkpoint.name + ".json"))
+        checkpoint_hashes[checkpoint_name] = _sha256_file(checkpoint)
         _require(
-            sidecar.get("checkpoint_sha256") == _sha256_file(checkpoint),
+            sidecar.get("checkpoint_sha256") == checkpoint_hashes[checkpoint_name],
             f"{checkpoint_name} SHA-256 differs from its sidecar.",
         )
         _require(
             sidecar.get("identity") == identity,
             f"{checkpoint_name} identity differs from the run.",
+        )
+
+    if stage in {"resource_constrained", "full"}:
+        final_summary = summary.get("final_test")
+        final_test = _load_json(root / "final_test.json")
+        final_context = final_test.get("context")
+        final_evaluation = final_test.get("evaluation")
+        final_protocol = final_test.get("protocol")
+        final_selection = final_test.get("selection")
+        final_threshold = final_test.get("threshold_policy")
+        final_metrics = final_test.get("metrics")
+        for name, value in (
+            ("run summary", final_summary),
+            ("context", final_context),
+            ("evaluation", final_evaluation),
+            ("protocol", final_protocol),
+            ("selection", final_selection),
+            ("threshold policy", final_threshold),
+            ("metrics", final_metrics),
+        ):
+            _require(isinstance(value, Mapping), f"Final Test {name} is missing.")
+        _require(
+            final_evaluation.get("partition") == "test",
+            "Final artifact must evaluate Test exactly once.",
+        )
+        _require(
+            final_context.get("config_sha256") == resolved.sha256
+            and final_context.get("manifest_sha256") == manifest_fingerprint,
+            "Final Test context fingerprints differ from the run.",
+        )
+        _require(
+            final_selection.get("checkpoint") == "checkpoints/best.pt"
+            and final_selection.get("checkpoint_sha256")
+            == checkpoint_hashes["best.pt"],
+            "Final Test did not use the authenticated best checkpoint.",
+        )
+        best_epoch = final_selection.get("best_validation_epoch_index")
+        _require(
+            isinstance(best_epoch, int) and 0 <= best_epoch < len(history),
+            "Final Test best Validation epoch is invalid.",
+        )
+        selected_validation = _load_json(
+            root / "validation" / f"validation_epoch_{best_epoch:04d}.json"
+        )
+        selected_metrics = selected_validation.get("metrics")
+        _require(
+            isinstance(selected_metrics, Mapping)
+            and final_selection.get("threshold_metric")
+            == "threshold_at_far_0p1pct"
+            and final_selection.get("frozen_threshold")
+            == selected_metrics.get("threshold_at_far_0p1pct"),
+            "Final Test threshold was not frozen from best Validation FAR 0.1%.",
+        )
+        _require(
+            final_threshold.get("decision_threshold_source")
+            == "frozen_validation_security_threshold"
+            and final_threshold.get("security_threshold_selected") is True,
+            "Final Test threshold provenance is invalid.",
+        )
+        _require(
+            all(_finite_number(value) for value in final_metrics.values()),
+            "Final Test metrics contain a non-finite value.",
+        )
+        _require(
+            final_summary.get("checkpoint_sha256")
+            == checkpoint_hashes["best.pt"]
+            and final_summary.get("trial_list_sha256")
+            == final_protocol.get("trial_list_sha256")
+            and final_summary.get("metrics") == final_metrics,
+            "Final Test summary differs from the immutable artifact.",
         )
 
     metrics_path = root / "metrics.jsonl"

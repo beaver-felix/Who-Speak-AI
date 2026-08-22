@@ -19,6 +19,18 @@ from speaker_recognition.data.tidyvoice import (
 )
 
 
+def test_canonical_scanner_avoids_one_file_stat_per_audio() -> None:
+    """Large Kaggle scans must not issue a remote stat for every WAV."""
+    source_path = (
+        Path(__file__).resolve().parents[2]
+        / "src/speaker_recognition/data/tidyvoice.py"
+    )
+    source = source_path.read_text(encoding="utf-8")
+
+    assert "audio_path.is_file()" not in source
+    assert "_parse_discovered_tidyvoice_audio_path" in source
+
+
 def test_parse_train_path_into_canonical_record(tmp_path: Path) -> None:
     """A valid training path should preserve all identity metadata."""
     dataset_root = tmp_path / "TidyVoiceX_ASV"

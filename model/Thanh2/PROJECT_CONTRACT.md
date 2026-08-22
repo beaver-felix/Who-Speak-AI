@@ -911,3 +911,25 @@ The new pipeline must address these limitations or document why a limitation rem
   algorithms and pass again before retrying the pilot.
 - Detailed record:
   `docs/decisions/007_ecapa_adapter_implementation.md`.
+
+## Resource-Constrained Six-Run Execution - 2026-08-22
+
+- The remaining wall-clock budget is approximately eight hours; the original
+  15-epoch full matrix is retained as future work, not silently relabeled.
+- Three model-specific Kaggle notebooks distribute the architectures across
+  three team members. Every notebook requires GPU T4 x2 and concurrently runs
+  TidyVoice on `cuda:0` and ViMD on `cuda:1` in independent processes.
+- The accepted emergency stage uses every Train speaker, one deterministic
+  rotating utterance per speaker per epoch, at most three epochs, Validation
+  patience one, one evaluation crop, and offline W&B/local JSONL evidence.
+- Final Test runs exactly once from the best Validation-selected checkpoint.
+  Its operating threshold is selected on that Validation epoch at FAR 0.1%,
+  frozen, and applied to Test without Test-driven tuning.
+- TidyVoice manifest assembly must not issue one remote `is_file` or `resolve`
+  operation per audio file. Dataset roots and directories remain validated,
+  and every discovered filename must retain the audited WAV-only contract.
+- Results must be labeled compute-constrained and single-seed, not optimal.
+- The local regression suite contains 222 passing tests before notebook
+  generation.
+- Detailed record:
+  `docs/decisions/015_resource_constrained_parallel_execution.md`.
