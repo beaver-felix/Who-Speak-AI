@@ -20,7 +20,7 @@ EXPECTED_CHECKS = {
     "exact_genuine_count",
     "exact_impostor_count",
     "exact_utterance_count",
-    "exact_crop_count",
+    "valid_variable_crop_coverage",
     "complete_required_metrics",
     "metrics_finite",
     "security_threshold_not_selected",
@@ -126,8 +126,15 @@ def validate_artifact(path: Path) -> dict[str, object]:
         raise ValueError("minDCF must be non-negative.")
     if extraction.get("utterance_count") != 8:
         raise ValueError("Extraction utterance coverage changed.")
-    if extraction.get("crop_count") != 16:
-        raise ValueError("Extraction crop coverage changed.")
+    crop_count = extraction.get("crop_count")
+    if (
+        isinstance(crop_count, bool)
+        or not isinstance(crop_count, int)
+        or not 8 <= crop_count <= 16
+    ):
+        raise ValueError(
+            "Extraction must contain one or two crops per utterance."
+        )
     if not all(_positive_number(value) for value in extraction.values()):
         raise ValueError("Extraction statistics must all be positive.")
 

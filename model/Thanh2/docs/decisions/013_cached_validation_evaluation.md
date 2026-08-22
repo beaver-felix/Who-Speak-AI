@@ -20,6 +20,10 @@ Use one shared evaluation boundary with the following invariants:
   receives deterministic, evenly spaced crops in chronological order.
 - Crop embeddings are averaged per utterance and then L2-normalized, producing
   exactly one cached embedding per utterance.
+- An utterance shorter than the fixed crop contributes one repeated crop;
+  longer utterances contribute the requested evenly spaced crops. Evidence
+  therefore records the observed crop count instead of assuming every
+  utterance is long enough to produce the requested maximum.
 - Trials use cosine similarity between cached utterance vectors. No trial may
   invoke the audio loader or model independently.
 - The expected trial-list SHA-256 must match before GPU work and again before
@@ -54,7 +58,7 @@ Each Validation artifact contains:
 5. extraction wall/model timing and derived throughput; and
 6. canonical split, epoch, segment duration, and segment count.
 
-The local regression suite contains 193 passing tests. It validates numerical
+The local regression suite contains 195 passing tests. It validates numerical
 aggregation, cache integrity, cosine scoring, trial fingerprints, complete
 metrics, threshold provenance, strict serialization, Validation-only source
 boundaries, deterministic extraction settings, and the CUDA-event latency

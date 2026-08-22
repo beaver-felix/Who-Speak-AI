@@ -852,7 +852,7 @@ The new pipeline must address these limitations or document why a limitation rem
   model-only throughput. Model latency uses a preloaded batch-one crop, 10
   warm-ups, 50 CUDA-event measurements, and mean/median/p95 milliseconds.
 - Validation evidence is strict finite JSON written by atomic replacement.
-- The local suite contains 193 passing tests. The real T4 evaluation gate is
+- The local suite contains 195 passing tests. The real T4 evaluation gate is
   still pending.
 - Methodology decision:
   `docs/decisions/013_cached_validation_evaluation.md`.

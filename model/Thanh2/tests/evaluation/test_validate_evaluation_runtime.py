@@ -52,7 +52,7 @@ def _payload(model_name: str) -> dict[str, object]:
         "exact_genuine_count": True,
         "exact_impostor_count": True,
         "exact_utterance_count": True,
-        "exact_crop_count": True,
+        "valid_variable_crop_coverage": True,
         "complete_required_metrics": True,
         "metrics_finite": True,
         "security_threshold_not_selected": True,
@@ -103,7 +103,7 @@ def _payload(model_name: str) -> dict[str, object]:
             "evaluation": {
                 "embedding_extraction": {
                     "utterance_count": 8,
-                    "crop_count": 16,
+                    "crop_count": 12,
                     "batch_count": 2,
                     "wall_seconds": 1.0,
                     "model_seconds": 0.5,
@@ -172,7 +172,22 @@ def test_validator_rejects_non_finite_latency(tmp_path: Path) -> None:
 def test_validator_rejects_false_gate_check(tmp_path: Path) -> None:
     """Every producer-side runtime check must remain present and true."""
     payload = _payload("wavlm_mhfa")
-    payload["checks"]["exact_crop_count"] = False
+    payload["checks"]["valid_variable_crop_coverage"] = False
 
     with pytest.raises(ValueError, match="checks failed"):
+        _load_validator().validate_artifact(_write(tmp_path, payload))
+
+
+@pytest.mark.parametrize("crop_count", [7, 17])
+def test_validator_rejects_crop_count_outside_policy(
+    tmp_path: Path,
+    crop_count: int,
+) -> None:
+    """Eight utterances may contribute only one or two crops apiece."""
+    payload = _payload("ecapa_tdnn")
+    payload["validation"]["evaluation"]["embedding_extraction"][
+        "crop_count"
+    ] = crop_count
+
+    with pytest.raises(ValueError, match="one or two crops"):
         _load_validator().validate_artifact(_write(tmp_path, payload))
