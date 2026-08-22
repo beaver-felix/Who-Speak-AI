@@ -1,0 +1,125 @@
+{
+  "checks": {
+    "complete_required_metrics": true,
+    "exact_genuine_count": true,
+    "exact_impostor_count": true,
+    "exact_trial_count": true,
+    "exact_utterance_count": true,
+    "latency_finite_positive": true,
+    "metrics_finite": true,
+    "returned_metrics_finite": true,
+    "security_threshold_not_selected": true,
+    "trial_fingerprint_matches": true,
+    "valid_variable_crop_coverage": true
+  },
+  "fixture": {
+    "dataset": "tidyvoice",
+    "genuine_trial_count": 4,
+    "impostor_trial_count": 12,
+    "partition": "validation",
+    "segment_count": 2,
+    "segment_samples": 64240,
+    "speaker_count": 4,
+    "trial_count": 16,
+    "trial_list_sha256": "e75f9db54b7b546b38527153c679cc764096a00554d641388dff08df19a630a6",
+    "utterance_batch_size": 4,
+    "utterance_count": 8
+  },
+  "latency": {
+    "mean_ms": 9.250241870880126,
+    "measured_iterations": 50,
+    "median_ms": 8.840464115142822,
+    "p95_ms": 12.883803129196167,
+    "warmup_iterations": 10
+  },
+  "model": {
+    "embedding_dim": 256,
+    "name": "rawnet3",
+    "revision": "c89102eea20c3f96917c434de673c0ace0caddc0",
+    "source_id": "jungjee/RawNet3"
+  },
+  "purpose": "bounded_real_audio_evaluation_runtime_gate",
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "device_name": "Tesla T4",
+    "maximum_allocated_cuda_bytes": 770340352,
+    "torch_version": "2.10.0+cu128"
+  },
+  "schema_version": 1,
+  "validation": {
+    "context": {
+      "dataset_name": "tidyvoice",
+      "model_name": "rawnet3",
+      "purpose": "bounded_real_audio_evaluation_runtime_gate",
+      "seed": 42
+    },
+    "embeddings": {
+      "aggregation": "arithmetic_mean_then_l2_normalize",
+      "embedding_dim": 256,
+      "embedding_table_sha256": "7dd60cda74b468edecf055db5b4e9b1c215d4b39cd7fd2fafe61fb99562aedcc",
+      "score": "cosine_similarity",
+      "utterance_count": 8
+    },
+    "evaluation": {
+      "embedding_extraction": {
+        "batch_count": 2,
+        "crop_count": 13,
+        "mean_model_ms_per_crop": 62.58387521597055,
+        "model_crops_per_second": 15.97855672166516,
+        "model_seconds": 0.8135903778076172,
+        "utterance_count": 8,
+        "wall_seconds": 0.8866945150002721,
+        "wall_utterances_per_second": 9.022273020373364
+      },
+      "epoch_index": 0,
+      "partition": "validation",
+      "segment_count": 2,
+      "segment_samples": 64240
+    },
+    "metrics": {
+      "accuracy": 1.0,
+      "achieved_far_at_target_0p01pct": 0.0,
+      "achieved_far_at_target_0p1pct": 0.0,
+      "achieved_far_at_target_1pct": 0.0,
+      "achieved_far_at_target_5pct": 0.0,
+      "decision_threshold": 0.4227028233250821,
+      "eer": 0.0,
+      "eer_threshold": 0.4227028233250821,
+      "false_accepts": 0,
+      "false_rejects": 0,
+      "far": 0.0,
+      "frr": 0.0,
+      "min_dcf": 0.0,
+      "min_dcf_threshold": 0.4227028233250821,
+      "tar": 1.0,
+      "tar_at_far_0p01pct": 1.0,
+      "tar_at_far_0p1pct": 1.0,
+      "tar_at_far_1pct": 1.0,
+      "tar_at_far_5pct": 1.0,
+      "threshold_at_far_0p01pct": 0.4227028233250821,
+      "threshold_at_far_0p1pct": 0.4227028233250821,
+      "threshold_at_far_1pct": 0.4227028233250821,
+      "threshold_at_far_5pct": 0.4227028233250821,
+      "true_accepts": 4,
+      "true_rejects": 12
+    },
+    "min_dcf_configuration": {
+      "cost_false_alarm": 1.0,
+      "cost_miss": 1.0,
+      "p_target": 0.01
+    },
+    "protocol": {
+      "genuine_trial_count": 4,
+      "impostor_trial_count": 12,
+      "trial_count": 16,
+      "trial_list_sha256": "e75f9db54b7b546b38527153c679cc764096a00554d641388dff08df19a630a6"
+    },
+    "schema_version": 1,
+    "threshold_policy": {
+      "accept_rule": "cosine_score_greater_than_or_equal_threshold",
+      "decision_threshold_source": "validation_interpolated_eer_diagnostic",
+      "security_threshold_selected": false
+    }
+  }
+}

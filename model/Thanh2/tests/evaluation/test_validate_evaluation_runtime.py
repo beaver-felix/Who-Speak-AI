@@ -11,6 +11,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts/validate_evaluation_runtime.py"
+EVIDENCE_ROOT = PROJECT_ROOT / "results/model_audit/evaluation_runtime"
 
 
 def _load_validator() -> ModuleType:
@@ -191,3 +192,24 @@ def test_validator_rejects_crop_count_outside_policy(
 
     with pytest.raises(ValueError, match="one or two crops"):
         _load_validator().validate_artifact(_write(tmp_path, payload))
+
+
+@pytest.mark.parametrize(
+    ("filename", "model_name"),
+    [
+        ("ecapa_tdnn_t4.json", "ecapa_tdnn"),
+        ("rawnet3_t4.json", "rawnet3"),
+        ("wavlm_mhfa_t4.json", "wavlm_mhfa"),
+    ],
+)
+def test_committed_evaluation_evidence_remains_valid(
+    filename: str,
+    model_name: str,
+) -> None:
+    """Accepted T4 artifacts must continue satisfying the strict validator."""
+    summary = _load_validator().validate_artifact(EVIDENCE_ROOT / filename)
+
+    assert summary["model"] == model_name
+    assert summary["eer"] == pytest.approx(0.0)
+    assert summary["min_dcf"] == pytest.approx(0.0)
+    assert summary["median_latency_ms"] > 0.0

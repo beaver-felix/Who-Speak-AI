@@ -852,7 +852,19 @@ The new pipeline must address these limitations or document why a limitation rem
   model-only throughput. Model latency uses a preloaded batch-one crop, 10
   warm-ups, 50 CUDA-event measurements, and mean/median/p95 milliseconds.
 - Validation evidence is strict finite JSON written by atomic replacement.
-- The local suite contains 195 passing tests. The real T4 evaluation gate is
-  still pending.
+- The local suite contains 198 passing tests. The real T4 evaluation gate has
+  passed for all three adapters.
+- The bounded shared fixture used four speakers, eight utterances, sixteen
+  trials, and thirteen observed crops. Its zero EER/minDCF values prove runtime
+  integration only and are not dataset-level model-quality results.
+- Accepted model-only median batch-one latencies are ECAPA-TDNN `12.023 ms`,
+  RawNet3 `8.840 ms`, and WavLM+MHFA `35.260 ms` on a Tesla T4.
+- Accepted evaluation evidence SHA-256 values are:
+  - ECAPA-TDNN:
+    `d53bf18519bc59939d22cccf7ab1bda20ede0822c2110c952c2b524dc981827b`;
+  - RawNet3:
+    `86b09b00fc9d73e7b9dffe3e34c86b76adbe8b6ec003dce635d0f70629d8651c`;
+  - WavLM+MHFA:
+    `16f5ba7e2f6c6b23a072bf6d99383e3089664edc2a26e7c71e6376e34061bed1`.
 - Methodology decision:
   `docs/decisions/013_cached_validation_evaluation.md`.

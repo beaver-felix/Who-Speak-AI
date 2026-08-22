@@ -1,7 +1,7 @@
 # Decision 013: Cached Validation Evaluation and Latency Protocol
 
 Date: 2026-08-22
-Status: implementation accepted; real CUDA gate pending
+Status: accepted
 
 ## Question
 
@@ -58,7 +58,7 @@ Each Validation artifact contains:
 5. extraction wall/model timing and derived throughput; and
 6. canonical split, epoch, segment duration, and segment count.
 
-The local regression suite contains 195 passing tests. It validates numerical
+The local regression suite contains 198 passing tests. It validates numerical
 aggregation, cache integrity, cosine scoring, trial fingerprints, complete
 metrics, threshold provenance, strict serialization, Validation-only source
 boundaries, deterministic extraction settings, and the CUDA-event latency
@@ -66,6 +66,38 @@ protocol. A real T4 execution is still required before this runtime is marked
 fully accepted. The bounded gate and its dependency-free evidence validator are
 implemented by `scripts/smoke_test_evaluation_runtime.py` and
 `scripts/validate_evaluation_runtime.py` respectively.
+
+## Accepted T4 Evidence
+
+All three adapters passed the complete callback, cache, scoring, metric,
+strict-JSON, and batch-one latency path on a Tesla T4 with PyTorch
+`2.10.0+cu128` and CUDA `12.8`. The shared fixture contained four speakers,
+eight utterances, four genuine trials, twelve impostor trials, and thirteen
+observed crops. Thirteen is correct: three short utterances contributed one
+repeated crop, while five longer utterances contributed two endpoint crops.
+
+| Model | EER | minDCF | Median latency | p95 latency | Peak CUDA allocation |
+|---|---:|---:|---:|---:|---:|
+| ECAPA-TDNN | 0.000000 | 0.000000 | 12.023 ms | 12.912 ms | 450,069,504 bytes |
+| RawNet3 | 0.000000 | 0.000000 | 8.840 ms | 12.884 ms | 770,340,352 bytes |
+| WavLM+MHFA | 0.000000 | 0.000000 | 35.260 ms | 36.692 ms | 821,150,720 bytes |
+
+The zero error values prove only that the tiny bounded fixture is internally
+separable. They are not estimates of dataset-level performance and must not be
+used to rank the architectures. The latency numbers are model-only measurements
+under the declared batch-one protocol and may be compared only under that
+scope.
+
+Accepted artifact SHA-256 values:
+
+- `ecapa_tdnn_t4.json`:
+  `d53bf18519bc59939d22cccf7ab1bda20ede0822c2110c952c2b524dc981827b`;
+- `rawnet3_t4.json`:
+  `86b09b00fc9d73e7b9dffe3e34c86b76adbe8b6ec003dce635d0f70629d8651c`;
+- `wavlm_mhfa_t4.json`:
+  `16f5ba7e2f6c6b23a072bf6d99383e3089664edc2a26e7c71e6376e34061bed1`;
+- downloaded archive:
+  `adb3a88e005668f8d9cfcef2fca08607a372a0509bf926d6ee3b007c96c1bdd8`.
 
 ## Advantages
 
