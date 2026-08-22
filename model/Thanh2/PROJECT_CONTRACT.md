@@ -929,7 +929,9 @@ The new pipeline must address these limitations or document why a limitation rem
   operation per audio file. Dataset roots and directories remain validated,
   and every discovered filename must retain the audited WAV-only contract.
 - Results must be labeled compute-constrained and single-seed, not optimal.
-- The local regression suite contains 222 passing tests before notebook
-  generation.
+- Three clean, output-free notebooks pin the executable workflow commit and
+  provide one-click ECAPA-TDNN, RawNet3, and WavLM+MHFA workers.
+- The local regression suite contains 225 passing tests, including notebook
+  JSON, Python syntax, revision, dataset, GPU, output, and secret guards.
 - Detailed record:
   `docs/decisions/015_resource_constrained_parallel_execution.md`.
