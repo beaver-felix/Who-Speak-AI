@@ -631,3 +631,31 @@ The new pipeline must address these limitations or document why a limitation rem
   benchmark performance.
 - Accepted methodology record:
   `docs/decisions/007_ecapa_adapter_implementation.md`.
+
+## Pending RawNet3 Adapter Gate — 2026-08-22
+
+- Checkpoint source is pinned to `jungjee/RawNet3` revision
+  `c89102eea20c3f96917c434de673c0ace0caddc0`.
+- `model.pt` must match SHA-256
+  `1ab283bcdf776bfceceea18240e56a8756835b1911b04f9c44f347d47c09f90c`
+  before restricted deserialization.
+- Architecture source is pinned to `clovaai/voxceleb_trainer` revision
+  `f51bab870672a9b0b50fa158b4e30f329e7866d7`.
+- The two required MIT-licensed source files are adapted locally with the
+  upstream license and source-hash provenance retained.
+- The checkpoint-compatible architecture is ECA, 256-dimensional output,
+  Sinc stride 10, and 16,280,322 trainable parameters.
+- `asteroid-filterbanks==0.4.0` is mandatory for the pinned architecture.
+- Checkpoint loading uses `weights_only=True`, a tensor-only structure check,
+  and strict state-dictionary compatibility.
+- Shared output is `[batch, 256]` with explicit L2 normalization.
+- RawNet3 batches require equal fixed crops; supplied relative lengths must all
+  equal 1.
+- The Kaggle compatibility gate uses the official recipe-derived 48,240-sample
+  training and 64,240-sample evaluation crops. These do not yet select the
+  final comparison configuration.
+- Status remains pending until real TidyVoice inference, deterministic repeat,
+  parameter count, checkpoint identity, and input/encoder gradient checks pass
+  on the Kaggle T4 and the JSON artifact is reviewed.
+- Methodology record:
+  `docs/decisions/008_rawnet3_adapter_implementation.md`.
