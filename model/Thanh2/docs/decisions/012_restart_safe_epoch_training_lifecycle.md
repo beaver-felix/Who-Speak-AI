@@ -1,7 +1,7 @@
 # Decision 012: Restart-Safe Epoch Training Lifecycle
 
 Date: 2026-08-22
-Status: implementation accepted locally; Kaggle checkpoint round-trip pending
+Status: accepted
 
 ## Question
 
@@ -57,8 +57,8 @@ WavLM+MHFA with these invariants:
   partial-batch metrics, EER/minDCF selection, patience behavior, finite logs,
   monotonic global steps, and required safe-checkpoint source boundaries.
 - Local syntax compilation and source inspection cover the Kaggle-only modules.
-- A real CUDA checkpoint save/interruption/restore equivalence test is still
-  required before a full training run begins.
+- A real CUDA checkpoint save/interruption/restore equivalence test passed all
+  14 exact checks on Kaggle.
 
 ## Advantages
 
@@ -78,9 +78,10 @@ WavLM+MHFA with these invariants:
   second T4.
 - Scheduler, augmentation, epoch budget, early-stopping constants, and
   validation-crop settings still require predeclared screening experiments.
-- GPU tensor and RNG round-trip equivalence is not yet empirical evidence.
+- The small fixture proves the shared serializer and lifecycle boundary, but
+  does not measure multi-gigabyte real-model checkpoint throughput.
 
-## Required Next Gate
+## Empirical CUDA Gate
 
 On Kaggle, train a small deterministic fixture, save after a non-final batch,
 restore into newly constructed model/optimizer/scaler objects, finish the next
@@ -108,3 +109,20 @@ the alternatives of `weights_only=False` and allowlisting `TorchVersion`
 because runtime provenance requires only primitive text and does not justify a
 broader deserialization boundary. The gate must be rerun; this failure is not
 accepted resume evidence.
+
+### Accepted Kaggle Attempt 2
+
+The corrected gate passed on 2026-08-22 using a Tesla T4, PyTorch
+`2.10.0+cu128`, CUDA `12.8`, deterministic algorithms, and cuBLAS workspace
+policy `:4096:8`. The uninterrupted and restored second step had exactly equal
+loss `17.66690444946289`, gradient norm `102.547119140625`, accuracy `0`, and
+loss scale `1024`.
+
+All 14 checks passed. Adapter, AAM head, AdamW, GradScaler, final cursor, and
+dropout-dependent embedding hashes were exactly equal between control and
+resume. The binary checkpoint SHA-256 was
+`b3aaf65f6f3b7616a73396a247355e4916bd03edeb2637ee431cd6df95be456c`.
+The accepted JSON is
+`results/model_audit/checkpoint_resume_gate.json`, with SHA-256
+`39dbbee464ddca79981192f6f9bcfaa459a6a00d4ec5f17093e78507dcdb180b`.
+The binary fixture checkpoint is not committed.

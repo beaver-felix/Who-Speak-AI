@@ -758,7 +758,7 @@ The new pipeline must address these limitations or document why a limitation rem
     `8d0d8219fb4e816dd9ca6628a9e2fecacc18cebc283301422a9ee40102c9b30b`.
 - Calibration proves capacity only; it is not accuracy, convergence, or model
   selection evidence.
-- The current local regression suite contains 166 passing tests.
+- The current local regression suite contains 167 passing tests.
 - Methodology decision:
   `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
 
@@ -817,15 +817,20 @@ The new pipeline must address these limitations or document why a limitation rem
   strict resume semantics so Kaggle restarts do not create duplicate runs.
 - Early-stopping constants, epoch budget, scheduler, augmentation, and
   validation-crop settings remain pending predeclared screening experiments.
-- The local suite contains 166 passing tests. A real Kaggle CUDA checkpoint
-  interruption/resume equivalence gate is still required before epoch runs.
-- The pending gate is implemented by
+- The local suite contains 167 passing tests. The real Kaggle CUDA checkpoint
+  interruption/resume equivalence gate passed all 14 exact checks.
+- The gate is implemented by
   `scripts/smoke_test_checkpoint_resume.py`; downloaded evidence must pass
-  `scripts/validate_checkpoint_resume.py` before acceptance. It compares 14
+  `scripts/validate_checkpoint_resume.py`. It compares 14
   exact checkpoint, cursor, metric, state, GradScaler, and RNG-output checks.
 - Kaggle gate attempt 1 was rejected before restore because PyTorch's
   `TorchVersion` string subclass was not allowed by weights-only loading. The
   writer now stores a built-in version string; `weights_only=True` remains
-  mandatory and no pickle global is allowlisted. A clean rerun is required.
+  mandatory and no pickle global is allowlisted. The corrected rerun passed.
+- Accepted checkpoint SHA-256:
+  `b3aaf65f6f3b7616a73396a247355e4916bd03edeb2637ee431cd6df95be456c`.
+- Accepted evidence artifact:
+  `results/model_audit/checkpoint_resume_gate.json`, SHA-256
+  `39dbbee464ddca79981192f6f9bcfaa459a6a00d4ec5f17093e78507dcdb180b`.
 - Methodology decision:
   `docs/decisions/012_restart_safe_epoch_training_lifecycle.md`.

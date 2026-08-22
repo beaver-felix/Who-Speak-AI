@@ -143,6 +143,22 @@ def test_accept_exact_checkpoint_resume_evidence(tmp_path: Path) -> None:
     }
 
 
+def test_accept_committed_kaggle_checkpoint_evidence() -> None:
+    """The accepted real CUDA artifact must remain validator-clean."""
+    artifact = (
+        PROJECT_ROOT
+        / "results/model_audit/checkpoint_resume_gate.json"
+    )
+
+    assert _load_validator().validate_artifact(artifact) == {
+        "checkpoint_sha256": (
+            "b3aaf65f6f3b7616a73396a247355e4916bd03edeb2637ee431cd6df95be456c"
+        ),
+        "checks": 14,
+        "step_two_loss": pytest.approx(17.66690444946289),
+    }
+
+
 def test_reject_changed_resumed_state_hash(tmp_path: Path) -> None:
     """One mismatched optimizer state must fail the entire gate."""
     payload = deepcopy(_payload())

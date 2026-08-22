@@ -1,0 +1,125 @@
+{
+  "checkpoint": {
+    "filename": "fixture_resume.pt",
+    "schema_version": 1,
+    "sha256": "b3aaf65f6f3b7616a73396a247355e4916bd03edeb2637ee431cd6df95be456c",
+    "sidecar_filename": "fixture_resume.pt.json"
+  },
+  "checks": {
+    "adapter_state_exact": true,
+    "checkpoint_hash_matches_restore": true,
+    "final_cursor_exact": true,
+    "objective_state_exact": true,
+    "optimizer_state_exact": true,
+    "restored_cursor_matches_saved_cursor": true,
+    "restored_history_is_empty": true,
+    "rng_dependent_embedding_exact": true,
+    "scaler_state_exact": true,
+    "sidecar_hash_matches_checkpoint": true,
+    "step_two_accuracy_exact": true,
+    "step_two_gradient_norm_exact": true,
+    "step_two_loss_exact": true,
+    "step_two_loss_scale_exact": true
+  },
+  "control_final_cursor": {
+    "best_epoch_index": null,
+    "best_validation_eer": null,
+    "best_validation_min_dcf": null,
+    "epoch_accuracy_sum": 0.0,
+    "epoch_example_count": 8,
+    "epoch_index": 0,
+    "epoch_loss_sum": 134.63227081298828,
+    "global_step": 2,
+    "next_batch_index": 2,
+    "stale_validation_count": 0
+  },
+  "control_second_step": {
+    "accuracy": 0.0,
+    "gradient_norm_before_clipping": 102.547119140625,
+    "loss": 17.66690444946289,
+    "loss_scale": 1024.0
+  },
+  "control_state_sha256": {
+    "adapter": "90acf5b8195c6b4eeb62d813932f45e7028322b3e407f00fb6a09aba2befba74",
+    "embeddings": "966d96577fd18c27b4443ab4bb18355970fbbad12f9921e2663ec0a08c71ea49",
+    "objective": "ca25758bf8f77fc54775cc19091a2de098599cebf77ecfbbf1ee0e84c7a9bca2",
+    "optimizer": "8d3be254ffb199856f48cb23ca67614fefc6e4cf8fa5a893f1872061aef87ca0",
+    "scaler": "2323efe9b0678eb18fbefb6ce10aa23f2c6cb4f8bbd471d53ce196d7f77f4da7"
+  },
+  "first_step": {
+    "accuracy": 0.0,
+    "gradient_norm_before_clipping": 81.29910278320312,
+    "loss": 15.99116325378418,
+    "loss_scale": 1024.0
+  },
+  "fixture": {
+    "batch_size": 4,
+    "class_count": 6,
+    "dropout_probability": 0.25,
+    "embedding_dim": 8,
+    "gradient_clip_norm": 5.0,
+    "initial_loss_scale": 1024.0,
+    "input_dim": 16,
+    "mixed_precision": "fp16",
+    "optimizer": "adamw",
+    "optimizer_group_names": [
+      "encoder",
+      "aam_softmax_head"
+    ],
+    "seed": 42
+  },
+  "identity": {
+    "config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataset_name": "synthetic",
+    "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model_name": "checkpoint_fixture",
+    "seed": 42
+  },
+  "purpose": "cuda_checkpoint_interruption_resume_equivalence",
+  "resumed_final_cursor": {
+    "best_epoch_index": null,
+    "best_validation_eer": null,
+    "best_validation_min_dcf": null,
+    "epoch_accuracy_sum": 0.0,
+    "epoch_example_count": 8,
+    "epoch_index": 0,
+    "epoch_loss_sum": 134.63227081298828,
+    "global_step": 2,
+    "next_batch_index": 2,
+    "stale_validation_count": 0
+  },
+  "resumed_second_step": {
+    "accuracy": 0.0,
+    "gradient_norm_before_clipping": 102.547119140625,
+    "loss": 17.66690444946289,
+    "loss_scale": 1024.0
+  },
+  "resumed_state_sha256": {
+    "adapter": "90acf5b8195c6b4eeb62d813932f45e7028322b3e407f00fb6a09aba2befba74",
+    "embeddings": "966d96577fd18c27b4443ab4bb18355970fbbad12f9921e2663ec0a08c71ea49",
+    "objective": "ca25758bf8f77fc54775cc19091a2de098599cebf77ecfbbf1ee0e84c7a9bca2",
+    "optimizer": "8d3be254ffb199856f48cb23ca67614fefc6e4cf8fa5a893f1872061aef87ca0",
+    "scaler": "2323efe9b0678eb18fbefb6ce10aa23f2c6cb4f8bbd471d53ce196d7f77f4da7"
+  },
+  "runtime": {
+    "cublas_workspace_config": ":4096:8",
+    "cuda_version": "12.8",
+    "deterministic_algorithms": true,
+    "device": "cuda:0",
+    "device_name": "Tesla T4",
+    "torch_version": "2.10.0+cu128"
+  },
+  "saved_cursor": {
+    "best_epoch_index": null,
+    "best_validation_eer": null,
+    "best_validation_min_dcf": null,
+    "epoch_accuracy_sum": 0.0,
+    "epoch_example_count": 4,
+    "epoch_index": 0,
+    "epoch_loss_sum": 63.96465301513672,
+    "global_step": 1,
+    "next_batch_index": 1,
+    "stale_validation_count": 0
+  },
+  "schema_version": 1
+}
