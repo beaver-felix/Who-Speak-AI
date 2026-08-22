@@ -17,4 +17,12 @@ checkpoint_sha256 = "1ab283bcdf776bfceceea18240e56a8756835b1911b04f9c44f347d47c0
 strict_checkpoint_compatibility = "passed"
 
 [model.configuration_status]
-training_recipe = "pending_validation"
+training_recipe = "initial_screening_candidate_pending_validation"
+
+[optimization]
+name = "adam"
+trainable_scope = "complete_encoder_and_new_head"
+encoder_learning_rate = 0.0001
+head_learning_rate = 0.0001
+weight_decay = 0.00005
+selection_status = "pretrained_finetuning_hypothesis_pending_validation"

@@ -25,11 +25,11 @@ python scripts/resolve_config.py \
   --output results/configs/vimd_rawnet3_smoke_s42.json
 ```
 
-The model files currently record verified provenance, architecture facts, and
-reference recipes only. A reference recipe is not automatically an accepted
-training recipe. Active crop duration, batch size, optimizer, learning rate,
-freezing policy, augmentation, scheduler, and epoch budget will be added only
-after model adapters and Kaggle memory/mini-run validation provide evidence.
+The shared AAM-Softmax control and the architecture-specific optimizer groups
+are now explicit. Their values are initial, source-informed screening
+candidates—not final selected recipes. Batch size remains unset until Kaggle
+memory calibration and a multi-batch mini-run; scheduler, augmentation, and
+epoch budget remain unset until validation evidence exists.
 
 ## Advantages
 
@@ -38,6 +38,8 @@ after model adapters and Kaggle memory/mini-run validation provide evidence.
 - Makes shared controls and justified model differences explicit.
 - Produces a complete artifact suitable for W&B and checkpoint provenance.
 - Unknown command-line overrides fail instead of being silently ignored.
+- Candidate status is stored beside every optimizer policy, preventing a source
+  recipe or plausible hypothesis from being mislabeled as an empirical result.
 
 ## Disadvantages
 
@@ -45,3 +47,5 @@ after model adapters and Kaggle memory/mini-run validation provide evidence.
   explicit status fields rather than placeholder nulls.
 - Adding a new experiment-only key requires placing it in a reviewed layer
   before it can be overridden.
+- The initial learning rates can be suboptimal on TidyVoice or ViMD; validation
+  experiments are intentionally required before they become accepted settings.

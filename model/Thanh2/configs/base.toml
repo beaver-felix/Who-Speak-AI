@@ -14,6 +14,17 @@ resampler = "scipy_resample_poly"
 persistent_workers = false
 selection_status = "required_until_epoch_aware_worker_sync"
 
+[training]
+mixed_precision = "fp16"
+gradient_clip_norm = 5.0
+
+[training.objective]
+name = "aam_softmax"
+margin = 0.2
+scale = 30.0
+easy_margin = false
+selection_status = "shared_control_accepted_pending_margin_ablation"
+
 [verification]
 seed = 42
 max_genuine_per_speaker = 20

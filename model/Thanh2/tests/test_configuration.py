@@ -42,6 +42,11 @@ def test_repository_layers_resolve_all_six_experiments(
     assert resolved.get("data.name") == dataset_name
     assert resolved.get("model.name") == model_name
     assert resolved.get("model.embedding_dim") == embedding_dim
+    assert resolved.get("training.objective.margin") == pytest.approx(0.2)
+    assert resolved.get("training.objective.scale") == pytest.approx(30.0)
+    assert resolved.get("optimization.selection_status").endswith(
+        "pending_validation"
+    )
     assert len(resolved.source_paths) == 3
     assert len(resolved.sha256) == 64
 
@@ -149,6 +154,16 @@ channel_policy = "arithmetic_mean"
 resampler = "scipy_resample_poly"
 [loader]
 persistent_workers = false
+[training]
+mixed_precision = "fp16"
+gradient_clip_norm = 5.0
+learning_rate = 0.001
+[training.objective]
+name = "aam_softmax"
+margin = 0.2
+scale = 30.0
+easy_margin = false
+selection_status = "shared_control_accepted_pending_margin_ablation"
 [verification]
 seed = 42
 max_genuine_per_speaker = 20
@@ -159,8 +174,6 @@ far_targets = [0.05, 0.01, 0.001, 0.0001]
 p_target = 0.01
 c_miss = 1.0
 c_false_alarm = 1.0
-[training]
-learning_rate = 0.001
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -181,10 +194,17 @@ learning_rate = 0.0002
     model.write_text(
         """
 [model]
-name = "fixture_model"
+name = "ecapa_tdnn"
 source_id = "fixture/model"
 revision = "0123456789abcdef"
 embedding_dim = 64
+[optimization]
+name = "adam"
+trainable_scope = "complete_encoder_and_new_head"
+encoder_learning_rate = 0.0001
+head_learning_rate = 0.0001
+weight_decay = 0.000002
+selection_status = "fixture_pending_validation"
 """.strip()
         + "\n",
         encoding="utf-8",

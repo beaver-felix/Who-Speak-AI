@@ -34,4 +34,14 @@ mhfa_learning_rate = 0.005
 epochs = 15
 
 [model.configuration_status]
-training_recipe = "reference_only_pending_validation"
+training_recipe = "source_aligned_candidate_pending_validation"
+
+[optimization]
+name = "adamw"
+trainable_scope = "transformer_layers_mhfa_and_new_head"
+transformer_learning_rate = 0.00002
+backend_learning_rate = 0.005
+head_learning_rate = 0.005
+layerwise_learning_rate_decay = 1.0
+weight_decay = 0.0
+selection_status = "pinned_source_base_recipe_pending_validation"

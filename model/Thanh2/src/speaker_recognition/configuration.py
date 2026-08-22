@@ -174,6 +174,51 @@ def validate_experiment_config(config: Mapping[str, Any]) -> None:
             "synchronized with persistent worker copies."
         )
 
+    # Decision 010 fixes the comparison objective. Architecture-specific
+    # optimizer groups remain explicit model-layer policy and are validated by
+    # the dependency-free TrainingSpecification boundary.
+    if _read_dotted_path(config, "training.mixed_precision") != "fp16":
+        raise ConfigurationError(
+            "training.mixed_precision must remain 'fp16' for the T4 baseline."
+        )
+    gradient_clip_norm = _read_dotted_path(
+        config,
+        "training.gradient_clip_norm",
+    )
+    if (
+        isinstance(gradient_clip_norm, bool)
+        or not isinstance(gradient_clip_norm, (int, float))
+        or gradient_clip_norm <= 0
+    ):
+        raise ConfigurationError(
+            "training.gradient_clip_norm must be positive."
+        )
+    expected_objective = {
+        "name": "aam_softmax",
+        "margin": 0.2,
+        "scale": 30.0,
+        "easy_margin": False,
+        "selection_status": (
+            "shared_control_accepted_pending_margin_ablation"
+        ),
+    }
+    if _read_dotted_path(config, "training.objective") != expected_objective:
+        raise ConfigurationError(
+            "training.objective must match the shared Decision 010 AAM-Softmax "
+            "control."
+        )
+
+    # Importing this module remains dependency-free; no PyTorch import occurs.
+    from speaker_recognition.training.specification import (
+        TrainingSpecification,
+        TrainingSpecificationError,
+    )
+
+    try:
+        TrainingSpecification.from_resolved_config(config)
+    except TrainingSpecificationError as error:
+        raise ConfigurationError(f"Invalid training specification: {error}") from error
+
 
 def write_resolved_config(
     resolved: ResolvedConfig,

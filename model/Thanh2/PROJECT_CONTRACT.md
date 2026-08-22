@@ -711,3 +711,34 @@ The new pipeline must address these limitations or document why a limitation rem
   benchmark performance.
 - Accepted methodology record:
   `docs/decisions/009_wavlm_mhfa_adapter_implementation.md`.
+
+## Accepted Training Objective Boundary — 2026-08-22
+
+- All three architectures use the same target-supervised AAM-Softmax control:
+  margin `0.2`, scale `30`, non-easy-margin thresholding, and mean
+  cross-entropy.
+- Every dataset receives a new classifier matrix sized to its training speaker
+  count; source classifiers remain excluded.
+- Angular calculations run in float32 inside FP16 training, and target logits
+  are replaced with scatter rather than a dense one-hot allocation.
+- ECAPA-TDNN and RawNet3 optimize their complete pretrained encoder plus the
+  new target head.
+- WavLM+MHFA optimizes only 12 Transformer layers, MHFA, and the new target
+  head. The official no-gradient feature front end and all other WavLM
+  parameters remain excluded.
+- Optimizer construction proves every enabled parameter occurs in exactly one
+  group.
+- Candidate policies are source-informed but not yet accepted as target-optimal:
+  ECAPA uses Adam at `1e-4`; RawNet3 uses Adam at `1e-4`; WavLM uses AdamW with
+  Transformer `2e-5` and MHFA/head `5e-3`.
+- Loss-Gated Learning and pseudo-label correction are excluded because both
+  target datasets have supervised speaker identities.
+- The T4 calibration gate must use the conservative ViMD class count `10,291`,
+  choose at most 80% of the largest passing size, and then confirm it with a
+  distinct multi-batch mini-run.
+- Calibration proves capacity only; it is not accuracy, convergence, or model
+  selection evidence.
+- The dependency-free local regression suite contains 123 passing tests; the
+  concrete objective/optimizer/memory gate still requires Kaggle T4 evidence.
+- Methodology decision:
+  `docs/decisions/010_shared_objective_and_optimizer_policy.md`.
