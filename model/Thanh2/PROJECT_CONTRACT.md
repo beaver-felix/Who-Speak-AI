@@ -604,3 +604,25 @@ The new pipeline must address these limitations or document why a limitation rem
   data paths are covered by the 88-test local regression suite.
 - Methodology decision:
   `docs/decisions/006_layered_configuration_and_dataset_interface.md`.
+
+## ECAPA Adapter Implementation Gate — 2026-08-22
+
+- A framework-neutral embedding-adapter contract is implemented for all three
+  model families.
+- The ECAPA implementation pins
+  `speechbrain/spkrec-ecapa-voxceleb` at full revision
+  `0f99f2d0ebe89ac095bcc5903c4dd8f72b367286` and requires SpeechBrain 1.1.0.
+- SpeechBrain's official loader constructs and loads the verified modules with
+  `freeze_params=False`; the project adapter retains only feature extraction,
+  sentence normalization, and the 20,767,552-parameter embedding model.
+- The incompatible upstream 7,205-class VoxCeleb classifier is excluded from
+  the target adapter and optimizer state.
+- The shared output contract is `[batch, 192]` with explicit L2 normalization.
+- PyTorch remains supplied by Kaggle and is deliberately omitted from project
+  dependency declarations to protect CUDA compatibility.
+- The dependency-free local suite contains 96 passing tests and the concrete
+  ECAPA module passes syntax compilation.
+- Acceptance remains pending a Kaggle T4 test proving real-speech inference,
+  deterministic repeat, and finite non-zero input/encoder gradients.
+- Proposed methodology record:
+  `docs/decisions/007_ecapa_adapter_implementation.md`.

@@ -18,6 +18,10 @@ data = [
     "scipy>=1.16,<1.17",
     "soundfile>=0.13,<0.14",
 ]
+ecapa = [
+    "huggingface-hub>=1.11,<1.12",
+    "speechbrain==1.1.0",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
