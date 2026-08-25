@@ -1,0 +1,60 @@
+While VoxCeleb \cite{nagrani2017voxceleb} and VoxCeleb2 \cite{chung2018voxceleb2} remain the de facto benchmarks for speaker recognition, they are unsuitable for our benchmark for three key reasons. First, both candidate models were already pretrained on VoxCeleb; evaluating on the same corpus would confound downstream validation with pre-training exposure and fail to assess target-domain adaptation. Second, VoxCeleb's English-centric broadcast speech cannot evaluate robustness to \emph{dialectal variation} across Vietnamese regions. Third, it lacks the typological breadth needed to test multilingual generalization. We therefore adopt two complementary datasets: the \textbf{ViMD} corpus \cite{dinh2024multidialect} for fine-grained Vietnamese dialect coverage, and the \textbf{TidyVoice} corpus \cite{farhadipour2026tidyvoice} for large-scale multilingual evaluation.
+
+\subsection{ViMD}
+
+The Vietnamese Multi-Dialect dataset (ViMD) \cite{dinh2024multidialect}, introduced at EMNLP~2024, contains approximately 102.56 hours of speech across roughly 19{,}000 utterances spanning all 63 provinces of Vietnam. Recordings are annotated with speaker identity codes (e.g., \texttt{spk\_\allowbreak\{province\}\_\allowbreak\{id\}}), gender labels, and province-level dialect tags. ViMD is valuable for our study because speakers from different provinces exhibit systematic phonetic and prosodic differences that a na\"ive model might conflate with speaker identity, requiring models to disentangle vocal characteristics from dialectal variation.
+
+Table~\ref{tab:vimd-stats} summarizes the key statistics of the ViMD dataset as used in our experiments.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Total duration (hours)       & $\approx$102.56 \\
+Total utterances (processed) & 18{,}947 (Train: 15{,}023, Val: 1{,}898, Test: 2{,}026) \\
+Total speakers (processed)   & 12{,}953 (Train: 10{,}291, Val: 1{,}318, Test: 1{,}344) \\
+Provinces / dialects         & 63 provinces \\
+Sample format                & 16~kHz mono (resampled from 44.1/48~kHz) \\
+Speaker leakage              & 0 (pruned overlapping singleton speakers) \\
+\bottomrule
+\end{tabular}
+\caption{Summary statistics of the ViMD dataset splits.}
+\label{tab:vimd-stats}
+\end{table}
+
+% TODO: Add distribution figures (e.g., utterances per speaker, duration histogram, dialect distribution)
+
+\subsection{TidyVoice}
+
+The TidyVoice dataset \cite{farhadipour2026tidyvoice} is a multilingual corpus curated from Mozilla Common Voice with a rigorous speaker-identity cleaning pipeline that resolves the label noise inherent in raw Common Voice client IDs. It comprises two partitions:
+
+\begin{itemize}
+    \item \textbf{Tidy-M} (monolingual): over 212{,}000 speakers across 81~languages.
+    \item \textbf{Tidy-X} (cross-lingual): approximately 4{,}500 multilingual speakers across 40~languages, designed for cross-lingual speaker verification.
+\end{itemize}
+
+TidyVoice also underpins the \textbf{TidyVoice 2026 Challenge} at Interspeech~2026. It complements ViMD by testing whether speaker embeddings generalize across entirely different languages and recording environments---critical for globally deployed virtual assistants.
+
+Table~\ref{tab:tidyvoice-stats} presents the key statistics of the TidyVoice partition used in our experiments.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Source corpus                & Mozilla Common Voice (Tidy-M partition) \\
+Total utterances             & 321{,}711 (Train: 262{,}268, Val: 29{,}720, Test: 29{,}723) \\
+Total speakers               & 4{,}474 (Train: 3{,}666, Val: 404, Test: 404) \\
+Speaker overlap              & 0 (disjoint speaker sets across splits) \\
+Sample format                & 16~kHz mono PCM \\
+Split balancing              & Language distribution \& utterance count \\
+\bottomrule
+\end{tabular}
+\caption{Summary statistics of the TidyVoice benchmark partition.}
+\label{tab:tidyvoice-stats}
+\end{table}
+
+% TODO: Add distribution figures (e.g., utterances per speaker, language distribution, duration histogram)

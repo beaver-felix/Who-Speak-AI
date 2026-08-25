@@ -1,0 +1,32 @@
+\subsection{Background}
+
+Voice-based virtual assistants have advanced rapidly alongside broader progress in Artificial Intelligence, evolving from simple command-response systems into sophisticated conversational agents capable of complex reasoning and task execution. Despite their growing capabilities, widespread adoption has surfaced critical concerns regarding user privacy and security.
+
+In particular, sensitive user information such as behavioral patterns, personal preferences, and private data must be safeguarded against unauthorized access. Reliably verifying a user's identity before processing such information is therefore an essential prerequisite for building trustworthy voice-based assistants. Speaker identification, the task of determining \emph{who} is speaking from an audio signal, offers a natural and non-intrusive means of achieving this verification.
+
+Beyond security, robust speaker identification also enables richer, more personalized user experiences. By recognizing individual speakers, a virtual assistant can tailor its responses, recommendations, and guidance to each user's unique context and history.
+
+However, speaker identification in real-world settings remains a challenging task. Spoken utterances vary considerably due to factors such as background noise, recording conditions, emotional state, and dialectal differences. Moreover, models trained on data from one linguistic or acoustic domain may generalize poorly to others, underscoring the need for evaluation across diverse and representative datasets. These challenges motivate the adoption of modern deep learning architectures that can learn robust speaker representations directly from raw or lightly processed audio.
+
+Motivated by these considerations, this project provides a concise introduction to speaker identification and presents a systematic analysis and comparison of several methods and models grounded in Statistical Machine Learning, with the overarching goal of advancing speaker identification for reliable and efficient virtual assistants.
+
+\subsection{Our Contributions}
+The main contributions of this project are threefold:
+
+\begin{enumerate}
+    \item \textbf{Dataset curation.} We select two publicly available datasets tailored to our concerns regarding practical speaker identification. The \emph{ViMD} dataset captures diverse dialectal variation across Vietnamese regions, while the \emph{TidyVoice2026} dataset provides a broader, multilingual corpus that tests robustness for global deployment. Together, these datasets allow us to evaluate model performance under both language-specific and language-agnostic conditions.
+
+    \item \textbf{Model benchmarking.} We systematically benchmark two state-of-the-art speaker identification models---RawNet3 and ECAPA-TDNN---on both datasets, analyzing their strengths and limitations to draw actionable conclusions for real-world use. Our evaluation covers multiple metrics and investigates how each architecture responds to domain shift between the two corpora.
+
+    \item \textbf{Proof-of-concept application.} We develop \emph{Who-Speak-AI}, a working voice-based virtual assistant that demonstrates secure, speaker-aware interaction. The application adopts a modular pipeline comprising Voice Activity Detection (VAD), Automatic Speech Recognition (ASR), a Large Language Model (LLM) for dialogue, and Text-to-Speech (TTS) synthesis. This end-to-end prototype illustrates how speaker identification can be seamlessly integrated into a practical conversational system.
+\end{enumerate}
+
+\subsection{Report Organization}
+The remainder of this report is organized as follows.
+\textbf{Section~\ref{sec:related}} reviews related works on speaker identification and recognition.
+\textbf{Section~\ref{sec:datasets}} describes the two datasets used in our experiments.
+\textbf{Section~\ref{sec:model}} presents the architectures of the models under study.
+\textbf{Section~\ref{sec:methods}} details the experimental setup and evaluation methodology.
+\textbf{Section~\ref{sec:results}} reports and analyzes the experimental results.
+\textbf{Section~\ref{sec:application}} introduces the Who-Speak-AI application as a proof-of-concept deployment.
+Finally, \textbf{Section~\ref{sec:conclusion}} concludes the report and discusses future directions.

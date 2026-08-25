@@ -1,0 +1,99 @@
+This section details our experimental methodology, including data preparation, fine-tuning protocols, and the evaluation framework used to benchmark ECAPA-TDNN and RawNet3 under resource-constrained conditions.
+
+\subsection{Data Partitioning and Preprocessing}
+
+To ensure strict zero-speaker leakage across splits, both datasets are partitioned into disjoint train, validation, and test subsets:
+
+\begin{itemize}
+    \item \textbf{TidyVoice:} The official training split is preserved for training (262{,}268 utterances, 3{,}666 speakers). The source development set (808 speakers) is partitioned 50/50 into Validation (29{,}720 utterances, 404 speakers) and Test (29{,}723 utterances, 404 speakers) using a deterministic seed (seed 42), optimizing for balanced utterance counts and language distribution with zero speaker overlap.
+    \item \textbf{ViMD:} The training split contains 15{,}023 utterances from 10{,}291 speakers. The original test split (2{,}026 utterances, 1{,}344 speakers) is kept intact. A data audit identified two overlapping singleton speakers between validation and test (\texttt{spk\_73\_0186} and \texttt{spk\_76\_0219}); these singleton rows were pruned from the validation set to eliminate speaker leakage, yielding a clean validation split of 1{,}898 utterances across 1{,}318 speakers without reducing the available genuine trial capacity.
+\end{itemize}
+
+Table~\ref{tab:dataset-splits} summarizes the standardized data splits across both corpora.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llrrr}
+\toprule
+\textbf{Dataset} & \textbf{Split} & \textbf{Utterances} & \textbf{Speakers} & \textbf{Genuine Pairs} \\
+\midrule
+\multirow{3}{*}{TidyVoice} 
+  & Train      & 262{,}268 & 3{,}666 & ---   \\
+  & Validation & 29{,}720  & 404     & 7{,}954 \\
+  & Test       & 29{,}723  & 404     & 7{,}898 \\
+\midrule
+\multirow{3}{*}{ViMD} 
+  & Train      & 15{,}023  & 10{,}291 & 7{,}044 \\
+  & Validation & 1{,}898   & 1{,}318  & 863     \\
+  & Test       & 2{,}026   & 1{,}344  & 1{,}042 \\
+\bottomrule
+\end{tabular}
+\caption{Summary of standardized dataset splits and trial capacities.}
+\label{tab:dataset-splits}
+\end{table}
+
+\textbf{Audio Preprocessing Pipeline.} All input audio files are standardized through a unified preprocessing pipeline:
+\begin{enumerate}
+    \item Decode raw audio to 32-bit floating-point arrays.
+    \item Downmix multi-channel audio to mono via arithmetic averaging across channels.
+    \item Resample audio to 16~kHz using polyphase filtering.
+    \item Retain native acoustic dynamic range without amplitude normalization.
+    \item Deterministically crop utterances: for training, audio is cropped to 48{,}000 samples (3.00~s) for ECAPA-TDNN and 48{,}240 samples (3.015~s) for RawNet3; for evaluation, segments are cropped to 48{,}000 samples for ECAPA-TDNN and 64{,}240 samples (4.015~s) for RawNet3.
+    \item Utterances shorter than the target segment duration are extended via sample repetition rather than zero-padding to prevent introducing synthetic silence artifacts.
+\end{enumerate}
+
+\subsection{Fine-Tuning Configuration}
+
+Both models are initialized from publicly released, state-of-the-art checkpoints pretrained on VoxCeleb:
+\begin{itemize}
+    \item \textbf{ECAPA-TDNN:} Loaded from \texttt{speechbrain/spkrec-ecapa-voxceleb} (revision \texttt{0f99f2d}), comprising 20.77M encoder parameters and outputting 192-dimensional embeddings.
+    \item \textbf{RawNet3:} Loaded from \texttt{jungjee/RawNet3} (revision \texttt{c89102e}), comprising 16.28M encoder parameters and outputting 256-dimensional embeddings.
+\end{itemize}
+
+For target-domain adaptation, the original pretrained classification heads are discarded and replaced with freshly initialized Additive Angular Margin Softmax (AAM-Softmax) \cite{deng2019arcface} heads, with output dimensions matching the number of training speakers in each respective dataset (3{,}666 for TidyVoice, 10{,}291 for ViMD). During downstream verification and identification inference, the classification heads are removed and only the L2-normalized encoder embeddings are utilized.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.0}
+\begin{tabular}{lll}
+\toprule
+\textbf{Configuration} & \textbf{ECAPA-TDNN} & \textbf{RawNet3} \\
+\midrule
+Random seed           & 42                  & 42 \\
+Objective function    & AAM-Softmax         & AAM-Softmax \\
+AAM margin ($m$) / scale ($s$) & 0.2 / 30   & 0.2 / 30 \\
+Precision             & FP16 (scale: 1024)  & FP16 (scale: 1024) \\
+Batch size            & 24                  & 24 \\
+Optimizer             & Adam                & Adam \\
+Encoder learning rate & $1\times 10^{-4}$   & $1\times 10^{-4}$ \\
+Head learning rate    & $1\times 10^{-4}$   & $1\times 10^{-4}$ \\
+Weight decay          & $2\times 10^{-6}$   & $5\times 10^{-5}$ \\
+Gradient clipping     & Global norm 5.0     & Global norm 5.0 \\
+Max training epochs   & 3                   & 3 \\
+Early stopping metric & Validation EER      & Validation EER \\
+Early stopping patience & 1 epoch (tie: minDCF) & 1 epoch (tie: minDCF) \\
+\bottomrule
+\end{tabular}
+\caption{Hyperparameter settings and training configurations.}
+\label{tab:training-hyperparams}
+\end{table}
+
+\textbf{Resource-Constrained Protocol.} To complete all experimental runs within an 8-hour computational budget on an NVIDIA Tesla T4 GPU, training is conducted with one deterministic utterance per speaker per epoch (3{,}666 examples/epoch for TidyVoice, 10{,}291 examples/epoch for ViMD). Batch size is fixed at 24 following memory stress-testing against the 10{,}291-class ViMD projection layer, preserving a 20\% safety margin below GPU VRAM limits.
+
+\subsection{Evaluation Protocol and Metrics}
+
+Verification performance is evaluated on frozen trial lists identical across all models to ensure an unbiased comparison:
+
+\begin{itemize}
+    \item \textbf{Trial Generation:} To prevent speakers with large utterance counts from dominating the evaluation, genuine pairs are capped at a maximum of 20 pairs per speaker. Each evaluation split is paired with 100{,}000 randomly sampled impostor trials, providing statistical resolution down to a False Acceptance Rate (FAR) of 0.01\%.
+    \item \textbf{Scoring:} The trial score between an enrollment embedding $\boldsymbol{e}_1$ and a test embedding $\boldsymbol{e}_2$ is computed as the cosine similarity:
+    \begin{equation}
+        S(\boldsymbol{e}_1, \boldsymbol{e}_2) = \frac{\boldsymbol{e}_1 \cdot \boldsymbol{e}_2}{\|\boldsymbol{e}_1\|_2 \, \|\boldsymbol{e}_2\|_2}
+    \end{equation}
+    \item \textbf{Primary Metrics:} We report the Equal Error Rate (\textbf{EER} in \%), where False Acceptance Rate equals False Rejection Rate ($\text{FAR} = \text{FRR}$), and the minimum Detection Cost Function (\textbf{minDCF}) parameterized with $P_{\text{target}} = 0.01$ and $C_{\text{fa}} = C_{\text{miss}} = 1.0$:
+    \begin{equation}
+        C_{\text{Det}} = C_{\text{miss}} \cdot P_{\text{target}} \cdot \text{FRR} + C_{\text{fa}} \cdot (1 - P_{\text{target}}) \cdot \text{FAR}
+    \end{equation}
+    \item \textbf{Security Operating Point:} A security-critical threshold is calibrated on the Validation set at $\text{FAR} = 0.1\%$ and frozen. This threshold is then evaluated exactly once on the Test set to report operating accuracy, FAR, FRR, and True Acceptance Rate ($\text{TAR} = 1 - \text{FRR}$). Additionally, we compute $\text{TAR@FAR}$ across $\{5\%, 1\%, 0.1\%, 0.01\%\}$.
+\end{itemize}

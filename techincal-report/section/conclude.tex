@@ -1,0 +1,14 @@
+This report benchmarked ECAPA-TDNN and RawNet3 across multilingual (TidyVoice) and Vietnamese multi-dialect (ViMD) conditions. While ECAPA-TDNN demonstrated stronger multilingual generalization (3.912\% vs.\ 5.875\% EER on TidyVoice), RawNet3 excelled on regional Vietnamese speech (3.071\% vs.\ 3.804\% EER and 0.2262 vs.\ 0.4516 minDCF on ViMD), accompanied by 21.6\% fewer parameters and 26.5\% lower GPU latency. Consequently, \textbf{RawNet3 fine-tuned on ViMD} is selected as the biometric verification engine for the \emph{Who-Speak-AI} virtual assistant.
+
+% ==============================================================================
+% TODO: FINAL APPLICATION INTEGRATION & USER TESTING
+% ==============================================================================
+% TODO: The modular virtual assistant application (VAD + ASR + LLM + TTS + Speaker Recognition)
+% is currently under active implementation. Once completed, this section will be expanded
+% to summarize:
+% 1. End-to-end integration latency and real-time responsiveness.
+% 2. Live microphone verification accuracy and user enrollment experience.
+% 3. Personalized dialogue interactions facilitated by speaker identification.
+% ==============================================================================
+
+Future work includes unconstrained multi-epoch training with data augmentation and optimizing on-device CPU execution.

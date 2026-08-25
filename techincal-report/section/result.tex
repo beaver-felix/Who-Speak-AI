@@ -1,0 +1,114 @@
+This section presents the empirical results of benchmarking ECAPA-TDNN and RawNet3 across TidyVoice and ViMD, detailing training dynamics, verification accuracy, and computational efficiency.
+
+\subsection{Training Dynamics and Convergence}
+
+Table~\ref{tab:training-dynamics} records the training progression across the four model--dataset pairs. Each run operated under an early stopping patience of 1 epoch on validation EER (with minDCF as tie-breaker).
+
+\begin{table}[H]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcrrrl}
+\toprule
+\textbf{Model / Dataset} & \textbf{Epoch} & \textbf{Train Loss} & \textbf{Val EER (\%)} & \textbf{Val minDCF} & \textbf{Outcome} \\
+\midrule
+\multirow{2}{*}{ECAPA-TDNN / TidyVoice} 
+  & 0 & 16.4067 & \textbf{3.943} & \textbf{0.3685} & \textbf{Best Checkpoint} \\
+  & 1 & 15.7529 & 4.075 & 0.4068 & Early Stopped \\
+\midrule
+\multirow{2}{*}{ECAPA-TDNN / ViMD} 
+  & 0 & 17.0806 & \textbf{3.936} & \textbf{0.4503} & \textbf{Best Checkpoint} \\
+  & 1 & 15.3398 & 6.634 & 0.7661 & Early Stopped \\
+\midrule
+\multirow{2}{*}{RawNet3 / TidyVoice} 
+  & 0 & 15.7133 & \textbf{5.860} & \textbf{0.5251} & \textbf{Best Checkpoint} \\
+  & 1 & 14.7825 & 9.693 & 0.7767 & Early Stopped \\
+\midrule
+\multirow{3}{*}{RawNet3 / ViMD} 
+  & 0 & 15.9177 & 29.664 & 0.9164 & Initialized \\
+  & 1 & 14.8658 & 7.532  & 0.6805 & Improved \\
+  & 2 & 13.3438 & \textbf{2.692} & \textbf{0.2446} & \textbf{Best Checkpoint} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Training progression and checkpoint selection across four experimental runs.}
+\label{tab:training-dynamics}
+\end{table}
+
+A notable observation is that decreasing training loss did not consistently translate into lower validation error. For ECAPA-TDNN on both datasets and RawNet3 on TidyVoice, the models achieved their best validation metrics at Epoch~0; subsequent epochs caused validation degradation, triggering early stopping. In contrast, RawNet3 on ViMD exhibited continuous and substantial convergence, reducing validation EER from 29.66\% at Epoch~0 to 2.69\% at Epoch~2.
+
+\subsection{Speaker Verification Benchmark}
+
+Table~\ref{tab:test-metrics} reports the primary evaluation metrics on the unseen Test splits using the best checkpoints selected on Validation.
+
+\begin{table}[H]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrrrr}
+\toprule
+\textbf{Model} & \textbf{Dataset} & \textbf{EER (\%)} $\downarrow$ & \textbf{minDCF} $\downarrow$ & \textbf{Accuracy (\%)} & \textbf{FAR (\%)} & \textbf{FRR (\%)} & \textbf{TAR (\%)} $\uparrow$ \\
+\midrule
+ECAPA-TDNN & TidyVoice & \textbf{3.912} & \textbf{0.3586} & 97.865 & 0.080 & 28.159 & \textbf{71.841} \\
+RawNet3    & TidyVoice & 5.875          & 0.5624          & 96.509 & 0.124 & 46.126 & 53.874 \\
+\midrule
+ECAPA-TDNN & ViMD      & 3.804          & 0.4516          & 99.527 & 0.116 & 34.741 & 65.259 \\
+RawNet3    & ViMD      & \textbf{3.071} & \textbf{0.2262} & \textbf{99.765} & \textbf{0.075} & \textbf{15.547} & \textbf{84.453} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Final test performance on TidyVoice and ViMD. Thresholds are calibrated at $\text{FAR} = 0.1\%$ on the Validation split and evaluated once on the Test split.}
+\label{tab:test-metrics}
+\end{table}
+
+\textbf{Analysis of Operating Performance.} High overall accuracy values ($>96\%$) reflect the protocol's 100{,}000 impostor trials relative to genuine trials. Therefore, EER, minDCF, and True Acceptance Rate ($\text{TAR}$) at low False Acceptance Rates serve as the discriminative metrics:
+\begin{itemize}
+    \item \textbf{On TidyVoice (Multilingual):} ECAPA-TDNN achieves superior performance across all metrics, reducing EER by 33.4\% relative (3.912\% vs.\ 5.875\%) and minDCF by 36.2\% relative (0.3586 vs.\ 0.5624), while yielding a +17.97\% higher TAR at the frozen security threshold.
+    \item \textbf{On ViMD (Vietnamese Multi-Dialect):} RawNet3 significantly outperforms ECAPA-TDNN, achieving a 19.3\% relative reduction in EER (3.071\% vs.\ 3.804\%) and a 49.9\% relative reduction in minDCF (0.2262 vs.\ 0.4516). At the operational threshold, RawNet3 boosts TAR to 84.453\% (compared to 65.259\% for ECAPA-TDNN) while maintaining a strict 0.075\% FAR.
+\end{itemize}
+
+Table~\ref{tab:tar-at-far} provides a fine-grained evaluation of authentication security, detailing the True Acceptance Rate at varying target False Acceptance Rates ($\text{TAR@FAR}$).
+
+\begin{table}[H]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Model} & \textbf{Dataset} & \textbf{TAR@FAR 5\%} & \textbf{TAR@FAR 1\%} & \textbf{TAR@FAR 0.1\%} & \textbf{TAR@FAR 0.01\%} \\
+\midrule
+ECAPA-TDNN & TidyVoice & \textbf{96.771} & \textbf{90.377} & \textbf{73.563} & \textbf{48.974} \\
+RawNet3    & TidyVoice & 93.391          & 82.907          & 48.088          & 0.886 \\
+\midrule
+ECAPA-TDNN & ViMD      & \textbf{97.505} & 88.484          & 63.820          & 37.812 \\
+RawNet3    & ViMD      & 97.217          & \textbf{95.106} & \textbf{86.756} & \textbf{54.798} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{True Acceptance Rate (\%) at specific False Acceptance Rate thresholds ($\text{TAR@FAR}$).}
+\label{tab:tar-at-far}
+\end{table}
+
+\subsection{Computational Efficiency and Model Selection}
+
+To evaluate suitability for real-time deployment in our virtual assistant pipeline, standalone model inference latency was benchmarked on an NVIDIA Tesla T4 GPU using CUDA events across 50 iterations with batch size 1 after 10 warm-up runs (Table~\ref{tab:latency-benchmarks}).
+
+\begin{table}[H]
+\centering
+\resizebox{0.9\columnwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Model} & \textbf{Parameters} & \textbf{Median Latency (ms)} & \textbf{p95 Latency (ms)} \\
+\midrule
+ECAPA-TDNN & 20.77~M & 12.023 & 12.912 \\
+RawNet3    & \textbf{16.28~M} & \textbf{8.840}  & \textbf{12.884} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Model complexity and isolated GPU inference latency (batch size 1 on NVIDIA Tesla T4).}
+\label{tab:latency-benchmarks}
+\end{table}
+
+\textbf{Deployment Selection Rationale.} Based on our empirical findings, **RawNet3 fine-tuned on ViMD (Epoch~2)** is selected as the verification engine for the Who-Speak-AI virtual assistant:
+\begin{enumerate}
+    \item \textbf{Target-Domain Alignment:} The intended application is a Vietnamese-language conversational assistant. RawNet3 demonstrates clear superiority in modeling regional Vietnamese acoustic and dialectal nuances, obtaining 3.071\% EER and 0.2262 minDCF.
+    \item \textbf{High Security Margin:} At the operational security threshold ($\text{FAR} \le 0.1\%$), RawNet3 delivers an 84.45\% True Acceptance Rate, significantly reducing user friction (lower False Rejection) during voice authentication compared to ECAPA-TDNN (65.26\%).
+    \item \textbf{Efficiency Profile:} RawNet3 contains 21.6\% fewer parameters (16.28M vs.\ 20.77M) and exhibits 26.5\% lower median GPU latency (8.84~ms vs.\ 12.02~ms), preserving critical compute headroom for concurrent ASR, LLM reasoning, and TTS synthesis.
+\end{enumerate}

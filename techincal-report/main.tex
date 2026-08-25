@@ -1,102 +1,404 @@
-\documentclass[11pt]{article}
+\documentclass[a4paper,11pt,oneside]{article}
 
-% Change "review" to "final" to generate the final (sometimes called camera-ready) version.
-% Change to "preprint" to generate a non-anonymous version with page numbers.
-\usepackage[final]{acl}
-
-% Standard package includes
-\usepackage{times}
-\usepackage{latexsym}
-
-% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
-\usepackage[T1]{fontenc}
-% For Vietnamese characters
-% \usepackage[T5]{fontenc}
-% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
-
-% This assumes your files are encoded as UTF8
+% ==============================================================================
+% PACKAGES & CORE CONFIGURATION
+% ==============================================================================
 \usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
 
-% This is not strictly necessary, and may be commented out,
-% but it will improve the layout of the manuscript,
-% and will typically save some space.
+% Modern Typography (1.15x scale for high readability)
+\usepackage[default,semibold,scale=1.15]{sourcesanspro}
+\usepackage[scale=1.05]{sourcecodepro}
 \usepackage{microtype}
+\usepackage{amsmath,amssymb}
 
-% This is also not strictly necessary, and may be commented out.
-% However, it will improve the aesthetics of text in
-% the typewriter font.
-\usepackage{inconsolata}
+% Page Geometry (A4 Paper: 210mm x 297mm)
+\usepackage[
+    a4paper,
+    top=2.3cm,
+    bottom=2.4cm,
+    left=2.2cm,
+    right=2.2cm,
+    headheight=24pt,
+    footskip=1.2cm
+]{geometry}
 
-%Including images in your LaTeX document requires adding
-%additional package(s)
+% Visual Styling & Table Packages
+\usepackage{xcolor}
+\usepackage{colortbl}
 \usepackage{graphicx}
+\usepackage{eso-pic}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{positioning,calc,shapes.geometric}
+\usepackage{calc}
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{titletoc}
+\usepackage{float}
+\usepackage{multicol}
 
-% If the title and author information does not fit in the area allocated, uncomment the following
-%
-%\setlength\titlebox{<dim>}
-%
-% and set <dim> to something 5cm or larger.
+% Set array stretch for spacious, readable tables
+\renewcommand{\arraystretch}{1.25}
 
-\title{\Huge Who-Speak-AI: Real-World Speaker Verification}
+% Enable IEEEtran BST control in standard article class
+\makeatletter
+\def\bstctlcite{\@ifnextchar[{\@bstctlcite}{\@bstctlcite[@auxout]}}
+\def\@bstctlcite[#1]#2{\@bsphack
+  \@for\@citeb:=#2\do{%
+    \edef\@citeb{\expandafter\@firstofone\@citeb}%
+    \if@filesw\immediate\write\csname #1\endcsname{\string\citation{\@citeb}}\fi}%
+  \@esphack}
+\makeatother
 
-\author{Nguyen Manh Cuong \textsuperscript{1}\\
-  Student ID:  23127034\\
-  \small{\href{mailto:nmcuong23@clc.fitus.edu.}{nmcuong23@clc.fitus.edu.}}\\
-  \And Nguyen Tran Thien An \textsuperscript{1}\\
-  Student ID:  23127315\\
-  \small{\href{mailto:nttan23@clc.fitus.edu.}{nattan23@clc.fitus.edu.}}\\
-  \vspace{1em}\\
-  \textsuperscript{1} \small{\textbf{Faculty of Information Technology, University of Science, Ho Chi Minh, Vietnam.}}\\
-  \And Nguyen Dong Thanh \textsuperscript{1}\\
-  Student ID:  23127538\\
-  \small{\href{mailto:ndthanh23@clc.fitus.edu.}{ndthanh23@clc.fitus.edu.}}\\
+% Set captions with theme accents and readable size
+\captionsetup{
+    font=small,
+    labelfont={bf,color=themePrimary},
+    textfont={color=themeDark},
+    skip=7pt
 }
 
+% ==============================================================================
+% STRICT 3-COLOR PALETTE (Figures excluded)
+% 1. themePrimary: Deep Burgundy Accent (#5C2434)
+% 2. themeDark: Crisp Charcoal Body Text (#2B2325)
+% 3. themeTint / themeCardBg: Soft Warm Taupe / Linen (#E8DDD6 / #FAF6F3)
+% ==============================================================================
+\definecolor{themePrimary}{HTML}{5C2434}     % Color 1: Primary Accent
+\definecolor{themeDark}{HTML}{2B2325}        % Color 2: Body Text & Neutrals
+\definecolor{themeTint}{HTML}{E8DDD6}        % Color 3: Dividing lines & Borders
+\definecolor{themeCardBg}{HTML}{FAF6F3}      % Light background tint (3% opacity)
+
+% ==============================================================================
+% HYPERREF CONFIGURATION (Strictly using themePrimary)
+% ==============================================================================
+\usepackage[
+    colorlinks=true,
+    linkcolor=themePrimary,
+    citecolor=themePrimary,
+    urlcolor=themePrimary,
+    filecolor=themePrimary,
+    pdfauthor={Nguyen Van A, Tran Thi B, Le Hoang C},
+    pdftitle={Technical Report: Deep Audio-Visual Learning},
+    pdfsubject={Machine Learning Technical Report},
+    pdfpagemode=UseNone
+]{hyperref}
+
+% ==============================================================================
+% BACKGROUND MANAGEMENT (Fitted seamlessly with theme/*.pdf)
+% ==============================================================================
+\newcommand{\FrontPageBackground}{%
+    \AddToShipoutPictureBG*{%
+        \includegraphics[width=\paperwidth,height=\paperheight]{theme/Front-Page-BG.pdf}%
+    }%
+}
+
+\newcommand{\ContentPageBackground}{%
+    \AddToShipoutPictureBG{%
+        \includegraphics[width=\paperwidth,height=\paperheight]{theme/Back-Page-BG-W.pdf}%
+    }%
+}
+
+% ==============================================================================
+% HEADER & FOOTER CONFIGURATION (Page index placed bottom right)
+% ==============================================================================
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{themeTint}\leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\small\color{themeDark}\textit{\ReportTitle}}
+\fancyhead[R]{\small\color{themePrimary}\textbf{\CourseCode}}
+\fancyfoot[R]{\normalsize\bfseries\color{themePrimary}\thepage\ \textcolor{themeTint}{/}\ \color{themeDark}\pageref{LastPage}}
+
+% First page footer (bottom right, no header rule)
+\fancypagestyle{firstpage}{
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+    \fancyfoot[R]{\normalsize\bfseries\color{themePrimary}\thepage\ \textcolor{themeTint}{/}\ \color{themeDark}\pageref{LastPage}}
+}
+
+% ==============================================================================
+% TYPOGRAPHY & SECTION HEADINGS
+% ==============================================================================
+\color{themeDark}
+\linespread{1.18}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+\setlength{\parindent}{0pt}
+
+% Use Roman Numerals for Section Indexing (I, II, III, IV, V) and Arabic for Subsections (1., 2., ...)
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\arabic{subsection}.}
+\renewcommand{\thesubsubsection}{\arabic{subsection}.\arabic{subsubsection}}
+
+\titleformat{\section}
+    {\normalfont\LARGE\bfseries\color{themePrimary}}
+    {\color{themePrimary}\thesection}{0.75em}
+    {}[\vspace{2pt}\color{themeTint}\hrule height 0.8pt]
+
+\titleformat{\subsection}
+    {\normalfont\Large\bfseries\color{themePrimary}}
+    {\color{themePrimary}\thesubsection}{0.65em}{}
+
+\titleformat{\subsubsection}
+    {\normalfont\large\bfseries\color{themeDark}}
+    {\color{themePrimary}\thesubsubsection}{0.5em}{}
+
+\newcommand{\sectionbreak}{\clearpage}
+
+\titlespacing*{\section}{0pt}{16pt plus 3pt minus 2pt}{9pt plus 2pt minus 2pt}
+\titlespacing*{\subsection}{0pt}{12pt plus 2pt minus 1pt}{6pt plus 1pt minus 1pt}
+\titlespacing*{\subsubsection}{0pt}{9pt plus 2pt minus 1pt}{4pt plus 1pt minus 1pt}
+
+% ==============================================================================
+% TABLE OF CONTENTS STYLING (Formatted for Roman Numerals)
+% ==============================================================================
+\titlecontents{section}[2.0em]
+    {\addvspace{2pt}\bfseries\small\color{themePrimary}}
+    {\contentslabel{2.0em}}
+    {\hspace*{-2.0em}}
+    {\titlerule*[0.5pc]{\color{themeTint}.}\contentspage}
+
+\titlecontents{subsection}[3.8em]
+    {\addvspace{0.5pt}\normalfont\footnotesize\color{themeDark}}
+    {\contentslabel{1.8em}}
+    {\hspace*{-1.8em}}
+    {\titlerule*[0.5pc]{\color{themeTint}.}\contentspage}
+
+% ==============================================================================
+% CALLOUT BOXES & TCOLORBOX STYLES (Adhering to 3-Color Palette)
+% ==============================================================================
+\tcbuselibrary{skins,breakable}
+
+\newtcolorbox{warmbox}[2][]{%
+    enhanced,
+    colback=themeCardBg,
+    colframe=themePrimary,
+    arc=4pt,
+    boxrule=0.9pt,
+    leftrule=4pt,
+    fonttitle=\large\bfseries\color{white},
+    coltitle=white,
+    title=#2,
+    attach boxed title to top left={xshift=10pt, yshift=-\tcboxedtitleheight/2},
+    boxed title style={
+        colback=themePrimary,
+        colframe=themePrimary,
+        boxrule=0.7pt,
+        arc=2pt,
+        top=3pt, bottom=3pt, left=8pt, right=8pt
+    },
+    top=10pt, bottom=8pt, left=10pt, right=10pt,
+    fontupper=\normalsize\color{themeDark},
+    #1
+}
+
+\newtcolorbox{keyinsightbox}[1][Key Insight]{%
+    enhanced,
+    colback=themeCardBg,
+    colframe=themePrimary,
+    arc=3pt,
+    boxrule=0.8pt,
+    leftrule=3.5pt,
+    top=7pt, bottom=7pt, left=10pt, right=10pt,
+    fontupper=\normalsize\color{themeDark},
+    before upper={\textbf{\color{themePrimary}\large #1:}\ }
+}
+
+% ==============================================================================
+% CODE LISTINGS STYLING (3-Color Compliant)
+% ==============================================================================
+\lstdefinestyle{warmcode}{
+    backgroundcolor=\color{themeCardBg},
+    commentstyle=\color{themeDark}\itshape,
+    keywordstyle=\color{themePrimary}\bfseries,
+    numberstyle=\footnotesize\color{themeDark},
+    stringstyle=\color{themePrimary},
+    basicstyle=\ttfamily\small\color{themeDark},
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=8pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{themeTint},
+    frameround=tttt,
+    xleftmargin=14pt,
+    framexleftmargin=8pt
+}
+\lstset{style=warmcode}
+
+% ==============================================================================
+% REPORT METADATA DEFINITIONS
+% ==============================================================================
+\newcommand{\ReportTitle}{Who-Speak-AI: Secure Virtual Assistant with Speaker Recognition}
+\newcommand{\CourseCode}{CSC15004}
+\newcommand{\CourseName}{Statistical Machine Learning}
+
+% 3 Authors Information
+\newcommand{\AuthorOneName}{Nguyễn Mạnh Cường}
+\newcommand{\AuthorOneID}{23127034}
+\newcommand{\AuthorOneUser}{nmcuong23}
+
+\newcommand{\AuthorTwoName}{Nguyễn Trần Thiên An}
+\newcommand{\AuthorTwoID}{23127315}
+\newcommand{\AuthorTwoUser}{nttan23}
+
+\newcommand{\AuthorThreeName}{Nguyễn Đồng Thanh}
+\newcommand{\AuthorThreeID}{23127538}
+\newcommand{\AuthorThreeUser}{ndthanh23}
+
+\newcommand{\EmailDomain}{clc.fitus.edu.vn}
+\newcommand{\ReportDate}{Ho Chi Minh City, \today}
+
+% ==============================================================================
+% DOCUMENT BEGIN
+% ==============================================================================
 \begin{document}
-\maketitle
+\bstctlcite{IEEEexample:BSTcontrol}
 
-\begin{abstract}
-abstract looks like this
-\end{abstract}
+% ------------------------------------------------------------------------------
+% FIRST PAGE: Essentials Only (Course Name, Logo, Title, 3 Authors, TOC)
+% ------------------------------------------------------------------------------
+{% Local scope for front page spacing
+\setlength{\parskip}{0pt}
+\FrontPageBackground
+\thispagestyle{firstpage}
 
-\section{Background and Introduction}
-Introduction looks like this
+% 1. Top Header: Course & Logo
+\noindent
+\begin{minipage}[c]{0.60\textwidth}
+    \raggedright
+    {\fontsize{13pt}{16pt}\selectfont\textbf{\color{themePrimary}\CourseName}}\\[2pt]
+    {\normalsize\color{themeDark}\textbf{Course Code:} \CourseCode}
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.38\textwidth}
+    \raggedleft
+    \includegraphics[height=1.25cm,keepaspectratio]{img/logo.png}
+\end{minipage}
 
-\section{Speaker Verification Model}
-something something
-\subsection{Overview of Dataset's Statistics}
-something something
-\subsection{Fine-tuning Mehthod}
-somethign something
-\subsection{Results and Evaluation}
-something something
+\vspace{0.25cm}
+{\color{themeTint}\hrule height 0.8pt}
 
-\section{Application in Voice-based agentic AI}
-Will yapidi yapida
+% Center Title & Authors vertically
+\vspace*{\fill}
 
-\subsection{Program's Architecture}
-will talks about architecture
+% 2. Report Title
+\begin{center}
+    {\fontsize{23pt}{27pt}\selectfont\textbf{\color{themePrimary}\ReportTitle}}
+\end{center}
 
-\subsection{Security measures}
-will talks about the way to ensure quality of enrollment input
+% Push Authors down near Table of Contents
+\vspace*{\fill}
 
-\section{Conclusion}
-conclusion something something
+% 3. Authors: Left-aligned with deep left indentation
+\noindent
+\hspace*{1.8cm}%
+\begin{minipage}{\dimexpr\textwidth-1.8cm\relax}
+    {\normalsize\bfseries\color{themeDark}\AuthorOneName}\\[1pt]
+    {\small\color{themeDark}\textbf{ID:} \AuthorOneID \quad$\bullet$\quad \ttfamily\footnotesize\AuthorOneUser@\EmailDomain}\\[5pt]
+    
+    {\normalsize\bfseries\color{themeDark}\AuthorTwoName}\\[1pt]
+    {\small\color{themeDark}\textbf{ID:} \AuthorTwoID \quad$\bullet$\quad \ttfamily\footnotesize\AuthorTwoUser@\EmailDomain}\\[5pt]
+    
+    {\normalsize\bfseries\color{themeDark}\AuthorThreeName}\\[1pt]
+    {\small\color{themeDark}\textbf{ID:} \AuthorThreeID \quad$\bullet$\quad \ttfamily\footnotesize\AuthorThreeUser@\EmailDomain}
+\end{minipage}
 
-\section{References}
-\bibliography{custom}
+\vspace{0.45cm}
 
-\section*{Limitations}
-some compromises that we had to made along the way.
+% 4. Location & Date and Table of Contents Box (Anchored to Bottom)
+\noindent
+\hfill{\normalsize\color{themeDark}\textit{\ReportDate}}\par
+\vspace{4pt}
 
-\section*{Acknowledgments}
-acknowledge chatgpt/gemini/claude for helping in ... ... (be specific)
+\noindent
+\begin{tcolorbox}[
+    enhanced,
+    colback=themeCardBg,
+    colframe=themeTint,
+    arc=4pt,
+    boxrule=0.8pt,
+    top=6pt, bottom=6pt, left=10pt, right=10pt
+]
+    {\fontsize{12pt}{14pt}\selectfont\textbf{\color{themePrimary}Table of Contents}}
+    \vspace{2pt}
+    {\color{themeTint}\hrule height 0.6pt}
+    \vspace{4pt}
+    
+    \begin{multicols}{2}
+    \setlength{\columnsep}{14pt}
+    \setlength{\parskip}{0pt}
+    \startcontents[firstpage]
+    \printcontents[firstpage]{l}{1}{\setcounter{tocdepth}{2}}
+    \end{multicols}
+\end{tcolorbox}
 
-\appendix
+\clearpage
+}% End local front page scope
 
-\section{Example Appendix}
-\label{sec:appendix}
+% ------------------------------------------------------------------------------
+% SUBSEQUENT PAGES: Background and Core Content
+% ------------------------------------------------------------------------------
+\ContentPageBackground
 
-This is an appendix.
+% Suppress subsections in TOC for Introduction and Related Works
+\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+\addtocontents{firstpage}{\protect\setcounter{tocdepth}{1}}
+\addtocontents{ptc}{\protect\setcounter{tocdepth}{1}}
+
+\section{Introduction}\label{sec:intro}
+\input{section/intro.tex}
+
+\section{Related Works}\label{sec:related}
+\input{section/related.tex}
+
+% Restore subsection listing in TOC starting from Datasets
+\addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
+\addtocontents{firstpage}{\protect\setcounter{tocdepth}{2}}
+\addtocontents{ptc}{\protect\setcounter{tocdepth}{2}}
+
+\section{Datasets}\label{sec:datasets}
+\input{section/data.tex}
+
+\section{Model}\label{sec:model}
+\input{section/model.tex}
+
+\section{Experimental Methods}\label{sec:methods}
+\input{section/method.tex}
+
+\section{Results and Analysis}\label{sec:results}
+\input{section/result.tex}
+
+\section{Application: Who-Speak-AI}\label{sec:application}
+\input{section/app.tex}
+
+\section{Conclusion}\label{sec:conclusion}
+\input{section/conclude.tex}
+
+% ==============================================================================
+% REFERENCES (Loaded from references.bib)
+% ==============================================================================
+\nocite{*}
+\bibliographystyle{IEEEtran}
+\phantomsection
+\addcontentsline{toc}{section}{References}
+\bibliography{references}
 
 \end{document}
