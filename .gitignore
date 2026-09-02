@@ -3,6 +3,7 @@ rawnet3
 app copy
 speech-to-speech
 pipecat
+Voice-Agent-PuPuPlatter
 .venv-voice
 .agents
 **/.DS_Store
