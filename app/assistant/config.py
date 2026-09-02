@@ -20,6 +20,8 @@ class LocalAgentSettings:
     livekit_dev_mode: bool
     owner_identity_id: UUID | None
     auth_ttl: timedelta
+    auth_challenge_seconds: float
+    auth_resume_guard_seconds: float
     keychain_service: str
     keychain_account: str
     conversation_enabled: bool
@@ -31,6 +33,9 @@ class LocalAgentSettings:
     zerotts_voice: str
     zerotts_cache_dir: str | None
     zerotts_warmup: bool
+    zerotts_startup_buffer_ms: float
+    zerotts_intra_op_threads: int
+    zerotts_codec_threads: int | None
     tts_queue_max_chunks: int
     tts_max_sentence_chars: int
     edge_tts_voice: str
@@ -59,6 +64,8 @@ class LocalAgentSettings:
         ttl_seconds = int(os.getenv("VOICE_AUTH_TTL_SECONDS", "300"))
         if ttl_seconds <= 0:
             raise ValueError("VOICE_AUTH_TTL_SECONDS must be positive.")
+        auth_challenge_seconds = float(os.getenv("VOICE_AUTH_CHALLENGE_SECONDS", "5"))
+        auth_resume_guard_seconds = float(os.getenv("VOICE_AUTH_RESUME_GUARD_SECONDS", "0.25"))
         vad_min_speech_seconds = float(os.getenv("VOICE_VAD_MIN_SPEECH_SECONDS", "0.3"))
         vad_silence_seconds = float(os.getenv("VOICE_VAD_SILENCE_SECONDS", "0.45"))
         vad_maximum_seconds = float(os.getenv("VOICE_VAD_MAXIMUM_SECONDS", "15"))
@@ -74,6 +81,18 @@ class LocalAgentSettings:
         zerotts_voice = os.getenv("VOICE_ZEROTTS_VOICE", "maichi").strip()
         zerotts_cache_dir = os.getenv("VOICE_ZEROTTS_CACHE_DIR", "").strip() or None
         zerotts_warmup = _as_bool("VOICE_ZEROTTS_WARMUP", True)
+        zerotts_startup_buffer_ms = float(
+            os.getenv("VOICE_ZEROTTS_STARTUP_BUFFER_MS", "250")
+        )
+        zerotts_intra_op_threads = int(
+            os.getenv("VOICE_ZEROTTS_INTRA_OP_THREADS", "4")
+        )
+        zerotts_codec_threads_value = os.getenv(
+            "VOICE_ZEROTTS_CODEC_THREADS", ""
+        ).strip()
+        zerotts_codec_threads = (
+            int(zerotts_codec_threads_value) if zerotts_codec_threads_value else None
+        )
         tts_queue_max_chunks = int(os.getenv("VOICE_TTS_QUEUE_MAX_CHUNKS", "8"))
         tts_max_sentence_chars = int(os.getenv("VOICE_TTS_MAX_SENTENCE_CHARS", "120"))
         participant_join_timeout_seconds = float(
@@ -81,6 +100,10 @@ class LocalAgentSettings:
         )
         if vad_min_speech_seconds <= 0 or vad_silence_seconds <= 0 or vad_maximum_seconds <= vad_min_speech_seconds:
             raise ValueError("VOICE_VAD timing values must be positive and maximum must exceed minimum speech.")
+        if not 4.0 <= auth_challenge_seconds <= 6.0:
+            raise ValueError("VOICE_AUTH_CHALLENGE_SECONDS must be between 4 and 6 seconds.")
+        if not 0.2 <= auth_resume_guard_seconds <= 0.3:
+            raise ValueError("VOICE_AUTH_RESUME_GUARD_SECONDS must be between 0.2 and 0.3 seconds.")
         if tts_timeout_seconds <= 0:
             raise ValueError("VOICE_TTS_TIMEOUT_SECONDS must be positive.")
         if tts_provider not in {"zerotts", "edge"}:
@@ -93,6 +116,12 @@ class LocalAgentSettings:
             raise ValueError("VOICE_ZEROTTS_MODEL and VOICE_ZEROTTS_VOICE must not be empty.")
         if tts_queue_max_chunks <= 0 or tts_max_sentence_chars < 8:
             raise ValueError("TTS queue size must be positive and sentence limit must be at least 8.")
+        if (
+            zerotts_startup_buffer_ms < 0
+            or zerotts_intra_op_threads <= 0
+            or (zerotts_codec_threads is not None and zerotts_codec_threads <= 0)
+        ):
+            raise ValueError("ZeroTTS runtime configuration values are invalid.")
         if smart_turn_cpu_count <= 0 or smart_turn_pre_speech_ms < 0 or smart_turn_max_wait_seconds <= 0:
             raise ValueError("Smart Turn configuration values are invalid.")
         if participant_join_timeout_seconds <= 0:
@@ -111,6 +140,8 @@ class LocalAgentSettings:
             livekit_dev_mode=dev_mode,
             owner_identity_id=owner_identity_id,
             auth_ttl=timedelta(seconds=ttl_seconds),
+            auth_challenge_seconds=auth_challenge_seconds,
+            auth_resume_guard_seconds=auth_resume_guard_seconds,
             keychain_service=os.getenv("VOICE_HE_KEYCHAIN_SERVICE", "who-speak.voice-he"),
             keychain_account=os.getenv("VOICE_HE_KEYCHAIN_ACCOUNT", "local-owner"),
             conversation_enabled=_as_bool("VOICE_AGENT_CONVERSATION_ENABLED"),
@@ -122,6 +153,9 @@ class LocalAgentSettings:
             zerotts_voice=zerotts_voice,
             zerotts_cache_dir=zerotts_cache_dir,
             zerotts_warmup=zerotts_warmup,
+            zerotts_startup_buffer_ms=zerotts_startup_buffer_ms,
+            zerotts_intra_op_threads=zerotts_intra_op_threads,
+            zerotts_codec_threads=zerotts_codec_threads,
             tts_queue_max_chunks=tts_queue_max_chunks,
             tts_max_sentence_chars=tts_max_sentence_chars,
             edge_tts_voice=os.getenv("VOICE_EDGE_TTS_VOICE", "vi-VN-HoaiMyNeural").strip() or "vi-VN-HoaiMyNeural",

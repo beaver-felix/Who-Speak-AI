@@ -18,6 +18,18 @@ class VoiceAgentState(StrEnum):
     ERROR = "error"
 
 
+class VoiceAgentSessionStatus(StrEnum):
+    """Lifecycle of the local voice worker, separate from a conversation turn."""
+
+    IDLE = "idle"
+    CONNECTING = "connecting"
+    STARTING = "starting"
+    READY = "ready"
+    RECONNECTING = "reconnecting"
+    STOPPING = "stopping"
+    FAILED = "failed"
+
+
 def event_id() -> str:
     return str(uuid4())
 

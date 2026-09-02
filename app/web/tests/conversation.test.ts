@@ -63,4 +63,43 @@ describe('voice conversation reducer', () => {
 
     expect(state.turnStates.t1.state).toBe('thinking')
   })
+
+  it('tracks session readiness separately from conversation turns', () => {
+    const starting = parseVoiceAgentEvent('{"type":"session_status","message_id":"s1","status":"starting","message":"Warming up"}')!
+    const ready = parseVoiceAgentEvent('{"type":"session_status","message_id":"s2","status":"ready","message":"Ready to listen"}')!
+    const state = [starting, ready].reduce(reduceConversation, initialConversationState)
+
+    expect(state.sessionStatus).toBe('ready')
+    expect(state.sessionMessage).toBe('Ready to listen')
+    expect(state.messages).toHaveLength(0)
+  })
+
+  it('does not regress startup when a queued connecting event arrives late', () => {
+    const starting = parseVoiceAgentEvent('{"type":"session_status","message_id":"s-start","status":"starting"}')!
+    const connecting = parseVoiceAgentEvent('{"type":"session_status","message_id":"s-connect","status":"connecting"}')!
+    const state = reduceConversation(reduceConversation(initialConversationState, starting), connecting)
+
+    expect(state.sessionStatus).toBe('starting')
+    expect(state.messages).toHaveLength(0)
+  })
+
+  it('keeps a startup failure separate from chat history', () => {
+    const failed = parseVoiceAgentEvent('{"type":"session_status","message_id":"s-failed","status":"failed","message":"Whisper unavailable"}')!
+    const state = reduceConversation(initialConversationState, failed)
+
+    expect(state.sessionStatus).toBe('failed')
+    expect(state.sessionMessage).toBe('Whisper unavailable')
+    expect(state.messages).toHaveLength(0)
+  })
+
+  it('keeps the processing stage alongside the visible turn state', () => {
+    const event = parseVoiceAgentEvent('{"type":"state","message_id":"m-stage","turn_id":"t-stage","state":"thinking","stage":"llm","sequence":1}')!
+    const state = reduceConversation(initialConversationState, event)
+
+    expect(state.turnStates['t-stage']).toMatchObject({ state: 'thinking', stage: 'llm' })
+  })
+
+  it('rejects an unknown session status without affecting chat history', () => {
+    expect(parseVoiceAgentEvent('{"type":"session_status","message_id":"s1","status":"online"}')).toBeNull()
+  })
 })

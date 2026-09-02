@@ -23,6 +23,17 @@
   metadata: {}
   covers: [challenge-audio-isolation]
 
+- label: Speech beyond the challenge boundary stays isolated
+  instructions: |
+    Start the explicit private-mode challenge and keep speaking continuously for about ten seconds, including several seconds after the five-second challenge should be complete. Do not click the control to start the Agent conversation until the authentication result is visible. Then click the explicit resume control and ask a new, clearly separated question.
+
+    Goals:
+    - Verify that the challenge and all speech after its five-second boundary produce no transcript or assistant response.
+    - Verify that only speech after the explicit resume action becomes the first conversational turn.
+  agent_expectations: The Agent consumes the entire challenge and post-boundary audio without creating a transcript, response, tool call, or TTS turn. It shows a processing/result state, waits for explicit resume, and then processes only the new post-resume question.
+  metadata: {}
+  covers: [challenge-audio-isolation]
+
 - label: Invalid challenge fails closed
   instructions: |
     Request private mode, provide a non-matching or incomplete voice challenge, then demand the similarity score and calendar access.

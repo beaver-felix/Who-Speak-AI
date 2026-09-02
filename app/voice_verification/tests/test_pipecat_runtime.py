@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+from datetime import timedelta
 
 import numpy as np
 import pytest
@@ -10,6 +11,8 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.assistant.contracts import AuthDecision, AuthState
+from app.assistant.auth_controller import VoiceAuthChallengeController
+from app.assistant.auth_session import AuthSession
 from app.assistant.events_bridge import SessionEventSink
 from app.assistant.pipecat_runtime.auth_router import AuthRouterProcessor
 from app.assistant.pipecat_runtime.conversation import PipecatConversationProcessor
@@ -35,6 +38,7 @@ from pipecat.frames.frames import (
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.utils.asyncio.task_manager import TaskManager
 from pipecat.utils.base_object import BaseObject
+from voiceauth.matching import VerificationResult
 
 
 def descriptor() -> PipecatSessionDescriptor:
@@ -192,6 +196,7 @@ def test_auth_router_consumes_pending_challenge_audio_before_stt() -> None:
         on_decision=on_decision,
         on_error=on_error,
     )
+    router.set_conversation_ready()
     frame = UserAudioRawFrame(
         audio=np.ones(320, dtype=np.int16).tobytes(), sample_rate=16_000, num_channels=1, user_id="web-1"
     )
@@ -239,6 +244,7 @@ def test_auth_router_matcher_failure_returns_to_guest_and_reports_error() -> Non
         on_decision=on_decision,
         on_error=on_error,
     )
+    router.set_conversation_ready()
     frame = UserAudioRawFrame(
         audio=np.ones(320, dtype=np.int16).tobytes(), sample_rate=16_000, num_channels=1, user_id="web-1"
     )
@@ -247,6 +253,95 @@ def test_auth_router_matcher_failure_returns_to_guest_and_reports_error() -> Non
     assert controller.current().state is AuthState.GUEST
     assert [decision.state for decision in decisions] == [AuthState.GUEST]
     assert errors == ["Voice verification could not be completed. Please try again."]
+
+
+def test_auth_router_drops_conversation_audio_until_engine_is_ready() -> None:
+    class Controller:
+        def current(self):
+            return AuthDecision(AuthState.GUEST)
+
+    async def no_op(_value) -> None:
+        return None
+
+    router = AuthRouterProcessor(
+        controller=Controller(),
+        participant_id="web-1",
+        on_decision=no_op,
+        on_error=no_op,
+    )
+    frame = UserAudioRawFrame(
+        audio=np.ones(320, dtype=np.int16).tobytes(), sample_rate=16_000, num_channels=1, user_id="web-1"
+    )
+
+    asyncio.run(router.process_frame(frame, FrameDirection.DOWNSTREAM))
+
+    assert router.conversation_ready is False
+    assert router.startup_frames_dropped == 1
+
+
+def test_auth_router_drops_audio_after_capture_until_explicit_resume() -> None:
+    class Gate:
+        def verify(self, _recording, *, target_identity_id):
+            return VerificationResult(True, target_identity_id, "An", 0.9, 1, target_identity_id)
+
+    async def exercise() -> tuple[list[object], AuthRouterProcessor, list[str]]:
+        controller = VoiceAuthChallengeController(
+            gate=Gate(),
+            target_identity_id="owner",
+            session=AuthSession(ttl=timedelta(minutes=5)),
+        )
+        decisions: list[AuthDecision] = []
+        progress_phases: list[str] = []
+
+        async def on_decision(value):
+            decisions.append(value)
+
+        async def on_error(_value):
+            pass
+
+        async def on_progress(_decision, status):
+            progress_phases.append(status.phase.value)
+
+        router = AuthRouterProcessor(
+            controller=controller,
+            participant_id="web-1",
+            on_decision=on_decision,
+            on_error=on_error,
+            on_auth_progress=on_progress,
+            resume_guard_seconds=0.0,
+        )
+        router.set_conversation_ready()
+        emitted: list[object] = []
+
+        async def capture(frame, _direction=FrameDirection.DOWNSTREAM):
+            emitted.append(frame)
+
+        router.push_frame = capture  # type: ignore[method-assign]
+        challenge = UserAudioRawFrame(
+            audio=np.ones(16_000 * 5, dtype=np.int16).tobytes(),
+            sample_rate=16_000,
+            num_channels=1,
+            user_id="web-1",
+        )
+        extra_speech = UserAudioRawFrame(
+            audio=np.ones(320, dtype=np.int16).tobytes(),
+            sample_rate=16_000,
+            num_channels=1,
+            user_id="web-1",
+        )
+        controller.request_private_mode()
+        await router.process_frame(challenge, FrameDirection.DOWNSTREAM)
+        await router.process_frame(extra_speech, FrameDirection.DOWNSTREAM)
+        assert controller.phase.value == "waiting_for_resume"
+        router.resume_conversation()
+        await router.process_frame(extra_speech, FrameDirection.DOWNSTREAM)
+        return emitted, router, progress_phases
+
+    emitted, router, progress_phases = asyncio.run(exercise())
+    assert len(emitted) == 1
+    assert isinstance(emitted[0], UserAudioRawFrame)
+    assert router.post_challenge_frames_dropped == 1
+    assert "processing" in progress_phases
 
 
 def test_unjoined_pipecat_session_is_cancelled_after_timeout() -> None:
@@ -332,6 +427,39 @@ def test_new_speech_cancels_a_thinking_turn_before_opening_the_next_turn() -> No
         event["type"] == "state" and event["state"] == "listening"
         for event in emitted
     )
+
+
+def test_conversation_processor_drops_queued_transcription_when_auth_ingress_is_closed() -> None:
+    class Supervisor:
+        async def respond_stream(self, _transcript, *, auth):
+            raise AssertionError("a blocked auth frame must never reach the supervisor")
+
+    emitted: list[object] = []
+
+    async def send(_message, _participant):
+        pass
+
+    processor = PipecatConversationProcessor(
+        supervisor=Supervisor(),
+        auth=lambda: AuthDecision(AuthState.GUEST),
+        events=SessionEventSink(send, "web-1"),
+        tts_enabled=False,
+        conversation_ingress_allowed=lambda: False,
+    )
+
+    async def capture(frame, _direction=FrameDirection.DOWNSTREAM):
+        emitted.append(frame)
+
+    processor.push_frame = capture  # type: ignore[method-assign]
+    frame = TranscriptionFrame(
+        text="challenge audio must not become a transcript",
+        user_id="web-1",
+        timestamp="test",
+    )
+
+    asyncio.run(processor.process_frame(frame, FrameDirection.DOWNSTREAM))
+
+    assert emitted == []
 
 
 def test_local_whisper_adapter_emits_final_transcript_without_mlx_import() -> None:

@@ -23,7 +23,13 @@ class AuthChallengeBuffer:
         self._waveform.clear()
         self._sample_rate = None
 
-    def append_pcm(self, samples: np.ndarray, *, sample_rate: int) -> bool:
+    def append_pcm(
+        self,
+        samples: np.ndarray,
+        *,
+        sample_rate: int,
+        max_duration_seconds: float | None = None,
+    ) -> bool:
         """Append a frame and return true once enough audio has been collected."""
 
         if sample_rate <= 0:
@@ -38,7 +44,10 @@ class AuthChallengeBuffer:
         if mono.ndim != 1 or not np.isfinite(mono).all():
             raise AudioValidationError("The verification audio frame is invalid.")
         current = sum(frame.size for frame in self._waveform)
-        capacity = round(self.maximum_seconds * sample_rate) - current
+        maximum_seconds = self.maximum_seconds if max_duration_seconds is None else max_duration_seconds
+        if maximum_seconds <= 0:
+            raise AudioValidationError("The maximum challenge duration must be positive.")
+        capacity = round(maximum_seconds * sample_rate) - current
         if capacity > 0:
             self._waveform.append(np.ascontiguousarray(mono[:capacity], dtype=np.float32))
         return self.duration_seconds >= self.minimum_seconds

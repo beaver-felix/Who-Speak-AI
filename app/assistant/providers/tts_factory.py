@@ -14,6 +14,9 @@ def build_tts_stack(
     zerotts_model: str,
     zerotts_voice: str,
     zerotts_cache_dir: str | None,
+    zerotts_startup_buffer_ms: float,
+    zerotts_intra_op_threads: int,
+    zerotts_codec_threads: int | None,
     queue_max_chunks: int,
     edge_voice: str,
 ) -> tuple[StreamingTTSProvider, StreamingTTSProvider | None]:
@@ -26,6 +29,9 @@ def build_tts_stack(
                 voice=zerotts_voice,
                 cache_dir=zerotts_cache_dir,
                 queue_max_chunks=queue_max_chunks,
+                startup_buffer_ms=zerotts_startup_buffer_ms,
+                intra_op_num_threads=zerotts_intra_op_threads,
+                codec_intra_op_num_threads=zerotts_codec_threads,
             )
         if name == "edge":
             return BufferedEdgeTTSProvider(EdgeTTSProvider(voice=edge_voice))

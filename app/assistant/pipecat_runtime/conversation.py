@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
@@ -47,6 +48,9 @@ class PipecatConversationProcessor(FrameProcessor):
         events: SessionEventSink,
         tts_enabled: bool,
         max_sentence_chars: int = 120,
+        session_id: str = "",
+        room_id_hash: str = "-",
+        conversation_ingress_allowed: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(name="conversation-supervisor")
         if max_sentence_chars < 8:
@@ -56,16 +60,61 @@ class PipecatConversationProcessor(FrameProcessor):
         self._events = events
         self._tts_enabled = tts_enabled
         self._max_sentence_chars = max_sentence_chars
+        self._session_id = session_id
+        self._room_id_hash = room_id_hash
+        self._conversation_ingress_allowed = conversation_ingress_allowed or (lambda: True)
         self._active_turn: str | None = None
         self._speaking_turn: str | None = None
         self._response_task: asyncio.Task | None = None
         self._retryable: dict[str, str] = {}
+        self._turn_started_at: dict[str, float] = {}
+        self._timing_marks: dict[str, set[str]] = {}
+
+    def _mark_timing(self, turn_id: str | None, stage: str) -> None:
+        if not turn_id or stage in self._timing_marks.setdefault(turn_id, set()):
+            return
+        self._timing_marks[turn_id].add(stage)
+        started = self._turn_started_at.setdefault(turn_id, time.monotonic())
+        logger.info(
+            "voice_turn_stage session_id=%s room_id_hash=%s turn_id=%s stage=%s elapsed_ms=%.1f",
+            self._session_id,
+            self._room_id_hash,
+            turn_id,
+            stage,
+            (time.monotonic() - started) * 1000,
+        )
+
+    async def _send_state(
+        self,
+        state: VoiceAgentState,
+        *,
+        turn_id: str | None = None,
+        stage: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        values: dict[str, object] = {"state": state}
+        if stage is not None:
+            values["stage"] = stage
+        if message is not None:
+            values["message"] = message
+        await self._events.send_event("state", turn_id=turn_id, **values)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, InterruptionFrame):
             await self._interrupt_active_turn()
             await self.push_frame(frame, direction)
+            return
+        if not self._conversation_ingress_allowed():
+            # AuthRouter is the first boundary, but frames already queued in
+            # VAD/STT may still arrive after a private-mode request. Drop
+            # those stale conversation frames as a second defense-in-depth
+            # boundary before they can create a transcript or tool call.
+            if isinstance(
+                frame,
+                (VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame, TranscriptionFrame, ErrorFrame),
+            ):
+                logger.debug("conversation_frame_dropped reason=auth_ingress_closed")
             return
         if isinstance(frame, VADUserStartedSpeakingFrame):
             response_in_progress = (
@@ -80,45 +129,42 @@ class PipecatConversationProcessor(FrameProcessor):
                 self._speaking_turn = None
                 await self.push_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
             elif self._speaking_turn:
-                await self._events.send_event(
-                    "state", turn_id=self._speaking_turn, state=VoiceAgentState.INTERRUPTED
+                self._mark_timing(self._speaking_turn, "interrupted")
+                await self._send_state(
+                    VoiceAgentState.INTERRUPTED,
+                    turn_id=self._speaking_turn,
+                    stage="transport",
                 )
                 self._speaking_turn = None
                 await self.push_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
             if self._active_turn is None:
                 self._active_turn = str(uuid4())
-                await self._events.send_event(
-                    "state", turn_id=self._active_turn, state=VoiceAgentState.LISTENING
-                )
+                self._mark_timing(self._active_turn, "speech_started")
+                await self._send_state(VoiceAgentState.LISTENING, turn_id=self._active_turn, stage="vad")
             await self.push_frame(frame, direction)
             return
         if isinstance(frame, VADUserStoppedSpeakingFrame):
             if self._active_turn:
-                await self._events.send_event(
-                    "state", turn_id=self._active_turn, state=VoiceAgentState.TRANSCRIBING
-                )
+                self._mark_timing(self._active_turn, "speech_stopped")
+                await self._send_state(VoiceAgentState.TRANSCRIBING, turn_id=self._active_turn, stage="stt")
             await self.push_frame(frame, direction)
             return
         if isinstance(frame, TranscriptionFrame):
             text = frame.text.strip()
             if not text:
-                await self._events.send_event(
-                    "state",
-                    turn_id=self._active_turn,
-                    state=VoiceAgentState.ERROR,
-                    message="No clear speech was detected. Please try again.",
-                )
+                self._mark_timing(self._active_turn, "error")
+                await self._send_state(VoiceAgentState.ERROR, turn_id=self._active_turn, stage="stt", message="No clear speech was detected. Please try again.")
                 self._active_turn = None
                 return
             if self._active_turn is None:
                 self._active_turn = str(uuid4())
-                await self._events.send_event(
-                    "state", turn_id=self._active_turn, state=VoiceAgentState.LISTENING
-                )
+                self._mark_timing(self._active_turn, "speech_started")
+                await self._send_state(VoiceAgentState.LISTENING, turn_id=self._active_turn, stage="vad")
             if self._response_task is not None and not self._response_task.done():
                 logger.warning("pipecat_transcript_dropped reason=response_in_progress")
                 return
             turn_id = self._active_turn
+            self._mark_timing(turn_id, "stt_final")
             self._retryable[turn_id] = text
             await self._events.send_event(
                 "transcript", turn_id=turn_id, text=text, is_final=True
@@ -128,12 +174,8 @@ class PipecatConversationProcessor(FrameProcessor):
             )
             return
         if isinstance(frame, ErrorFrame):
-            await self._events.send_event(
-                "state",
-                turn_id=self._active_turn,
-                state=VoiceAgentState.ERROR,
-                message="Local speech recognition is unavailable for this turn.",
-            )
+            self._mark_timing(self._active_turn, "error")
+            await self._send_state(VoiceAgentState.ERROR, turn_id=self._active_turn, stage="stt", message="Local speech recognition is unavailable for this turn.")
             self._active_turn = None
             return
         await self.push_frame(frame, direction)
@@ -143,13 +185,13 @@ class PipecatConversationProcessor(FrameProcessor):
         response_parts: list[str] = []
         tool_view: dict | None = None
         try:
-            await self._events.send_event(
-                "state", turn_id=turn_id, state=VoiceAgentState.THINKING
-            )
+            self._mark_timing(turn_id, "llm_started")
+            await self._send_state(VoiceAgentState.THINKING, turn_id=turn_id, stage="llm")
             async for delta, result in self._supervisor.respond_stream(
                 transcript, auth=self._auth()
             ):
                 if delta:
+                    self._mark_timing(turn_id, "llm_first_delta")
                     response_parts.append(delta)
                     tool_view = self._tool_view(result)
                     await self._events.send_event(
@@ -161,15 +203,18 @@ class PipecatConversationProcessor(FrameProcessor):
                     )
                     for sentence in sentence_buffer.push(delta):
                         if self._tts_enabled:
+                            self._mark_timing(turn_id, "tts_started")
                             await self.push_frame(
                                 VoiceTTSSpeakFrame(sentence, turn_id=turn_id)
                             )
             for sentence in sentence_buffer.flush():
                 if self._tts_enabled:
+                    self._mark_timing(turn_id, "tts_started")
                     await self.push_frame(VoiceTTSSpeakFrame(sentence, turn_id=turn_id))
             response = "".join(response_parts).strip()
             if not response:
                 raise RuntimeError("The language model returned no text response.")
+            self._mark_timing(turn_id, "llm_final")
             await self._events.send_event(
                 "assistant_response",
                 turn_id=turn_id,
@@ -180,22 +225,16 @@ class PipecatConversationProcessor(FrameProcessor):
             if self._tts_enabled:
                 await self.push_frame(VoiceTTSTurnEndFrame(turn_id=turn_id))
             else:
-                await self._events.send_event(
-                    "state", turn_id=turn_id, state=VoiceAgentState.COMPLETED
-                )
+                self._mark_timing(turn_id, "completed")
+                await self._send_state(VoiceAgentState.COMPLETED, turn_id=turn_id, stage="llm")
         except asyncio.CancelledError:
-            await self._events.send_event(
-                "state", turn_id=turn_id, state=VoiceAgentState.INTERRUPTED
-            )
+            self._mark_timing(turn_id, "interrupted")
+            await self._send_state(VoiceAgentState.INTERRUPTED, turn_id=turn_id, stage="transport")
             raise
         except Exception:
             logger.exception("pipecat_conversation_failed turn_id=%s", turn_id)
-            await self._events.send_event(
-                "state",
-                turn_id=turn_id,
-                state=VoiceAgentState.ERROR,
-                message="Assistant unavailable. Please retry this response.",
-            )
+            self._mark_timing(turn_id, "error")
+            await self._send_state(VoiceAgentState.ERROR, turn_id=turn_id, stage="llm", message="Assistant unavailable. Please retry this response.")
         finally:
             if self._active_turn == turn_id:
                 self._active_turn = None
@@ -221,33 +260,32 @@ class PipecatConversationProcessor(FrameProcessor):
     async def report_stt_error(self) -> None:
         if self._active_turn is None:
             return
-        await self._events.send_event(
-            "state",
+        self._mark_timing(self._active_turn, "error")
+        await self._send_state(
+            VoiceAgentState.ERROR,
             turn_id=self._active_turn,
-            state=VoiceAgentState.ERROR,
+            stage="stt",
             message="Local speech recognition is unavailable for this turn.",
         )
         self._active_turn = None
 
     async def audio_started(self, turn_id: str) -> None:
         self._speaking_turn = turn_id
-        await self._events.send_event(
-            "state", turn_id=turn_id, state=VoiceAgentState.SPEAKING
-        )
+        self._mark_timing(turn_id, "tts_first_audio")
+        await self._send_state(VoiceAgentState.SPEAKING, turn_id=turn_id, stage="tts")
 
     async def audio_completed(self, turn_id: str) -> None:
         if self._speaking_turn == turn_id:
             self._speaking_turn = None
-        await self._events.send_event(
-            "state", turn_id=turn_id, state=VoiceAgentState.COMPLETED
-        )
+        self._mark_timing(turn_id, "tts_finished")
+        self._mark_timing(turn_id, "completed")
+        await self._send_state(VoiceAgentState.COMPLETED, turn_id=turn_id, stage="tts")
 
     async def audio_error(self, turn_id: str, message: str) -> None:
         if self._speaking_turn == turn_id:
             self._speaking_turn = None
-        await self._events.send_event(
-            "state", turn_id=turn_id, state=VoiceAgentState.ERROR, message=message
-        )
+        self._mark_timing(turn_id, "error")
+        await self._send_state(VoiceAgentState.ERROR, turn_id=turn_id, stage="tts", message=message)
 
     @staticmethod
     def _tool_view(tool_result: dict | None) -> dict | None:

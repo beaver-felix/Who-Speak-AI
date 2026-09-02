@@ -13,6 +13,7 @@ Who Speak AI is a local-first voice assistant with a trusted voice-auth boundary
 
 - Joining a room never starts speaker verification and never grants private access.
 - Speaker verification starts only after an explicit private-mode request. Audio captured for that challenge is never treated as a chat request or sent to the conversational assistant.
+- The challenge captures exactly five seconds. Audio after the boundary, while local verification is processing, and until the participant explicitly resumes is discarded; a successful or failed result never opens conversation automatically.
 - A failed, silent, invalid, interrupted, expired, or unavailable verifier remains guest. No score is disclosed.
 - The assistant cannot grant private access, add calendar permission, or change authentication based on a spoken claim.
 - Reconnecting starts a new guest session; it cannot reuse a prior authentication result.

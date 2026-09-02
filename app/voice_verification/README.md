@@ -83,7 +83,10 @@ monotonic event sequence, final ASR transcript, incremental response text,
 public processing state, and an optional `Demo Calendar · Mock MCP` label.
 The browser never receives a score, embedding, HE context, matcher token, raw
 audio, or OpenAI key. Voice-challenge audio is never sent into the conversation
-pipeline.
+pipeline. The challenge captures exactly five seconds, then waits for an
+explicit `resume_conversation` or `continue_as_guest` command; speaking after
+the five-second boundary or while the matcher is processing is discarded and
+does not become an ASR transcript.
 
 Enable conversation explicitly in `.env.local`:
 
@@ -99,6 +102,9 @@ VOICE_ZEROTTS_MODEL=zeroweight-ai/ZeroTTS
 VOICE_ZEROTTS_VOICE=maichi
 VOICE_ZEROTTS_CACHE_DIR=./app/voice_verification/data/model-cache/zerotts
 VOICE_ZEROTTS_WARMUP=true
+VOICE_ZEROTTS_STARTUP_BUFFER_MS=250
+VOICE_ZEROTTS_INTRA_OP_THREADS=4
+VOICE_ZEROTTS_CODEC_THREADS=
 VOICE_TTS_QUEUE_MAX_CHUNKS=8
 VOICE_TTS_MAX_SENTENCE_CHARS=120
 VOICE_EDGE_TTS_VOICE=vi-VN-HoaiMyNeural
@@ -107,6 +113,21 @@ VOICE_VAD_SILENCE_SECONDS=0.45
 VOICE_VAD_MAXIMUM_SECONDS=15
 MCP_PROVIDER=mock
 ```
+
+### ZeroTTS startup buffer
+
+`VOICE_ZEROTTS_STARTUP_BUFFER_MS` là thời gian audio đầu tiên được giữ lại
+trước khi phát ra LiveKit. Mặc định `250` ms là mức cân bằng giữa độ trễ và
+khả năng tránh hụt tiếng.
+
+- Tăng lên `400` hoặc `600` ms nếu tiếng bị ngắt ngay lúc bắt đầu câu hoặc
+  giữa các chunk đầu tiên.
+- Giảm xuống `100` hoặc `0` ms khi audio đã liên tục nhưng muốn Agent phản hồi
+  sớm hơn.
+- Không tăng biến này để sửa tình trạng model sinh chậm liên tục; buffer hữu
+  hạn chỉ trì hoãn lúc bắt đầu và sẽ cạn nếu tốc độ sinh thấp hơn tốc độ phát.
+- Mỗi lần đổi giá trị phải restart Pipecat Agent. Nên đo ít nhất 5–10 lượt và
+  chỉ thay đổi một biến tại một thời điểm.
 
 The OpenAI adapter receives only the local final transcript and policy-selected
 capabilities. `MockCalendarProvider` is deterministic demo storage: it is not

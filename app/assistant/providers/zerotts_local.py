@@ -33,6 +33,9 @@ class ZeroTTSLocalProvider:
         voice: str = "maichi",
         cache_dir: str | None = None,
         queue_max_chunks: int = 8,
+        startup_buffer_ms: float = 250.0,
+        intra_op_num_threads: int = 4,
+        codec_intra_op_num_threads: int | None = None,
     ) -> None:
         if not model_name.strip():
             raise ValueError("ZeroTTS model name must not be empty.")
@@ -40,10 +43,19 @@ class ZeroTTSLocalProvider:
             raise ValueError("ZeroTTS voice must not be empty.")
         if queue_max_chunks <= 0:
             raise ValueError("ZeroTTS queue_max_chunks must be positive.")
+        if startup_buffer_ms < 0:
+            raise ValueError("ZeroTTS startup_buffer_ms must not be negative.")
+        if intra_op_num_threads <= 0:
+            raise ValueError("ZeroTTS intra_op_num_threads must be positive.")
+        if codec_intra_op_num_threads is not None and codec_intra_op_num_threads <= 0:
+            raise ValueError("ZeroTTS codec_intra_op_num_threads must be positive.")
         self._model_name = model_name.strip()
         self._voice = voice.strip()
         self._cache_dir = Path(cache_dir).expanduser() if cache_dir else None
         self._queue_max_chunks = queue_max_chunks
+        self._startup_buffer_ms = startup_buffer_ms
+        self._intra_op_num_threads = intra_op_num_threads
+        self._codec_intra_op_num_threads = codec_intra_op_num_threads
         self._model: Any | None = None
         self._model_lock = threading.Lock()
         self._active_stops: set[threading.Event] = set()
@@ -94,6 +106,12 @@ class ZeroTTSLocalProvider:
                         continue
 
         worker = asyncio.get_running_loop().run_in_executor(None, produce)
+        startup_buffer_bytes = int(
+            self.sample_rate * 2 * self._startup_buffer_ms / 1000
+        )
+        pending: list[TTSChunk] = []
+        pending_bytes = 0
+        started = startup_buffer_bytes <= 0
         try:
             while True:
                 item = output_queue.get_nowait() if not output_queue.empty() else None
@@ -103,8 +121,25 @@ class ZeroTTSLocalProvider:
                     await asyncio.sleep(0.005)
                     continue
                 if item is sentinel:
+                    # A short utterance may finish before the target buffer is
+                    # full. Do not drop its already-generated audio.
+                    for pending_item in pending:
+                        yield pending_item
+                    pending.clear()
                     break
-                yield item  # type: ignore[misc]
+                chunk = item  # type: ignore[assignment]
+                if not started:
+                    pending.append(chunk)
+                    pending_bytes += len(chunk.audio)
+                    if pending_bytes < startup_buffer_bytes:
+                        continue
+                    started = True
+                    for pending_item in pending:
+                        yield pending_item
+                    pending.clear()
+                    pending_bytes = 0
+                    continue
+                yield chunk
             await worker
             if error_holder:
                 raise error_holder[0]
@@ -162,5 +197,8 @@ class ZeroTTSLocalProvider:
             self._model = ZeroTTS.from_pretrained(
                 self._model_name,
                 cache_dir=str(self._cache_dir) if self._cache_dir is not None else None,
+                providers=["CPUExecutionProvider"],
+                intra_op_num_threads=self._intra_op_num_threads,
+                codec_intra_op_num_threads=self._codec_intra_op_num_threads,
             )
             return self._model

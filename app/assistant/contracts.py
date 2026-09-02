@@ -14,6 +14,40 @@ class AuthState(StrEnum):
     SESSION_EXPIRED = "session_expired"
 
 
+class AuthChallengePhase(StrEnum):
+    """Audio-ingress phase for one explicit voice-auth challenge.
+
+    This is deliberately separate from :class:`AuthState`. A successful
+    verification can grant authenticated capabilities while conversation
+    audio remains blocked until the user explicitly resumes the Agent.
+    """
+
+    IDLE = "idle"
+    CAPTURING = "capturing"
+    PROCESSING = "processing"
+    WAITING_FOR_RESUME = "waiting_for_resume"
+    CONVERSATION_READY = "conversation_ready"
+
+
+@dataclass(frozen=True)
+class AuthChallengeStatus:
+    """Safe progress information exposed to the browser."""
+
+    phase: AuthChallengePhase
+    elapsed_ms: int
+    target_ms: int
+    can_resume: bool = False
+
+    @classmethod
+    def idle(cls, target_ms: int) -> "AuthChallengeStatus":
+        return cls(
+            phase=AuthChallengePhase.IDLE,
+            elapsed_ms=0,
+            target_ms=target_ms,
+            can_resume=False,
+        )
+
+
 @dataclass(frozen=True)
 class AuthDecision:
     state: AuthState

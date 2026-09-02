@@ -18,8 +18,9 @@ from app.assistant.auth_controller import VoiceAuthChallengeController
 from app.assistant.auth_session import AuthSession
 from app.assistant.agents.conversation import ConversationSupervisor
 from app.assistant.config import LocalAgentSettings
-from app.assistant.contracts import AuthDecision, AuthState
+from app.assistant.contracts import AuthChallengePhase, AuthDecision, AuthState
 from app.assistant.events import VoiceAgentState, event_payload
+from app.assistant.events_bridge import auth_status_payload
 from app.assistant.livekit_tts import publish_mp3
 from app.assistant.providers.edge_tts_local import EdgeTTSProvider
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
@@ -38,6 +39,9 @@ AGENT_EVENT_TOPIC = "voice-agent-event"
 AGENT_COMMAND_TOPIC = "voice-agent-command"
 REQUEST_PRIVATE_MODE = "request_private_mode"
 CANCEL_PRIVATE_MODE = "cancel_private_mode"
+RESUME_CONVERSATION = "resume_conversation"
+CONTINUE_AS_GUEST = "continue_as_guest"
+RETRY_VOICE = "retry_voice"
 AGENT_PARTICIPANT_IDENTITY = "voice-auth-gate"
 
 
@@ -47,18 +51,6 @@ def require_livekit() -> None:
         import livekit.rtc  # noqa: F401
     except ImportError as error:
         raise RuntimeError("Install voice_verification with the [agent] extra to run the realtime agent.") from error
-
-
-def _status_payload(decision: AuthDecision) -> str:
-    """Frontend-visible state only; never include SV score or private material."""
-    return json.dumps(
-        {
-            "state": decision.state.value,
-            "display_name": decision.display_name if decision.may_use_private_tools else None,
-            "expires_at": decision.expires_at.isoformat() if decision.expires_at else None,
-        },
-        separators=(",", ":"),
-    )
 
 
 def _voice_target_from_dispatch(metadata: str, *, legacy_owner_id: str | None) -> tuple[str | None, str]:
@@ -110,6 +102,9 @@ async def auth_gate_entrypoint(ctx) -> None:
     processing_turns: set[str] = set()
     retryable_turns: dict[tuple[str, str], str] = {}
     event_sequences: dict[tuple[str, str], int] = {}
+    auth_sequences: dict[str, int] = {}
+    auth_progress_elapsed_ms: dict[str, int] = {}
+    resume_guard_until: dict[str, float] = {}
     turn_timings: dict[str, dict[str, float]] = {}
     room = ctx.room
     conversation = None
@@ -141,6 +136,7 @@ async def auth_gate_entrypoint(ctx) -> None:
                 gate=gate,
                 target_identity_id=target_identity_id,
                 session=AuthSession(ttl=settings.auth_ttl),
+                capture_seconds=settings.auth_challenge_seconds,
             )
         return controllers[identity]
 
@@ -171,9 +167,19 @@ async def auth_gate_entrypoint(ctx) -> None:
         }
         logger.info("voice_turn_latency turn_id=%s stages=%s", turn_id, safe_stages)
 
-    async def send_status(identity: str, decision: AuthDecision) -> None:
+    async def send_status(identity: str, decision: AuthDecision, *, controller=None) -> None:
+        auth_sequences[identity] = auth_sequences.get(identity, 0) + 1
+        challenge = controller.challenge_status() if controller is not None else None
+        session_id = str(getattr(room, "name", "")) or None
         await room.local_participant.send_text(
-            _status_payload(decision), topic=AUTH_STATUS_TOPIC, destination_identities=[identity]
+            auth_status_payload(
+                decision,
+                challenge=challenge,
+                session_id=session_id,
+                sequence=auth_sequences[identity],
+            ),
+            topic=AUTH_STATUS_TOPIC,
+            destination_identities=[identity],
         )
 
     async def send_event(identity: str, *, event_type: str, turn_id: str | None = None, **values) -> None:
@@ -345,14 +351,55 @@ async def auth_gate_entrypoint(ctx) -> None:
                 if frame.num_channels > 1:
                     pcm = pcm.reshape((-1, frame.num_channels))
                 normalized = np.ascontiguousarray(pcm, dtype=np.float32) / 32768.0
-                auth_state_before = controller.current().state
-                decision = await asyncio.to_thread(
-                    controller.append_pcm, normalized, sample_rate=frame.sample_rate
-                )
+                phase_before = controller.challenge_status().phase
+                capture_method = getattr(controller, "capture_pcm", None)
+                if capture_method is None:
+                    decision = await asyncio.to_thread(
+                        controller.append_pcm, normalized, sample_rate=frame.sample_rate
+                    )
+                else:
+                    captured = await asyncio.to_thread(
+                        capture_method, normalized, sample_rate=frame.sample_rate
+                    )
+                    decision = None
+                    if captured:
+                        await send_status(participant.identity, controller.current(), controller=controller)
+                        decision = await asyncio.to_thread(controller.verify_pending)
                 if decision is not None:
-                    await send_status(participant.identity, decision)
+                    await send_status(participant.identity, decision, controller=controller)
+                elif phase_before is AuthChallengePhase.CAPTURING:
+                    status = controller.challenge_status()
+                    last_elapsed_ms = auth_progress_elapsed_ms.get(participant.identity, -1)
+                    if status.elapsed_ms - last_elapsed_ms >= 250:
+                        auth_progress_elapsed_ms[participant.identity] = status.elapsed_ms
+                        await send_status(
+                            participant.identity,
+                            controller.current(),
+                            controller=controller,
+                        )
+                phase_after = controller.challenge_status().phase
+                # Capture, matcher processing, and the explicit resume wait
+                # all consume audio. This includes the terminal frame and any
+                # speech that continues past the five-second boundary.
+                if phase_before in {
+                    AuthChallengePhase.CAPTURING,
+                    AuthChallengePhase.PROCESSING,
+                    AuthChallengePhase.WAITING_FOR_RESUME,
+                } or phase_after in {
+                    AuthChallengePhase.PROCESSING,
+                    AuthChallengePhase.WAITING_FOR_RESUME,
+                }:
+                    if phase_before is not AuthChallengePhase.CAPTURING:
+                        logger.info(
+                            "voice_auth_audio_dropped identity=%s phase=%s",
+                            participant.identity,
+                            phase_before.value,
+                        )
+                    continue
+                if monotonic() < resume_guard_until.get(participant.identity, 0.0):
+                    continue
                 # The full challenge remains outside ASR/LLM, including its terminal frame.
-                if auth_state_before is AuthState.AUTH_PENDING:
+                if phase_before is AuthChallengePhase.CAPTURING:
                     turn_controller_for(participant.identity).begin_authentication()
                     continue
                 if settings.conversation_enabled and participant.identity not in processing_turns:
@@ -387,7 +434,7 @@ async def auth_gate_entrypoint(ctx) -> None:
             decision = controller.cancel()
             turn_controller_for(participant.identity).reset()
             logger.exception("Voice-auth audio processing failed for participant %s", participant.identity)
-            await send_status(participant.identity, decision)
+            await send_status(participant.identity, decision, controller=controller)
         finally:
             await stream.aclose()
 
@@ -407,6 +454,12 @@ async def auth_gate_entrypoint(ctx) -> None:
             turn_id = payload.get("turn_id")
             if payload.get("action") != "retry" or not isinstance(turn_id, str):
                 return
+            controller = controller_for(packet.participant.identity)
+            if controller.phase not in {
+                AuthChallengePhase.IDLE,
+                AuthChallengePhase.CONVERSATION_READY,
+            }:
+                return
             transcript = retryable_turns.get((packet.participant.identity, turn_id))
             if transcript is None or packet.participant.identity in processing_turns:
                 return
@@ -419,21 +472,39 @@ async def auth_gate_entrypoint(ctx) -> None:
 
         async def handle_auth_command() -> None:
             identity = packet.participant.identity
-            if command == REQUEST_PRIVATE_MODE:
+            if command in {REQUEST_PRIVATE_MODE, RETRY_VOICE}:
                 active_task = turn_tasks.get(identity)
                 if active_task is not None and not active_task.done():
                     active_task.cancel()
                 processing_turns.discard(identity)
                 turn_controller_for(identity).begin_authentication()
+                auth_progress_elapsed_ms[identity] = -1
                 if audio_source is not None:
                     audio_source.clear_queue()
                 decision = controller.request_private_mode()
             elif command == CANCEL_PRIVATE_MODE:
                 turn_controller_for(identity).reset()
                 decision = controller.cancel()
+                auth_progress_elapsed_ms[identity] = -1
+                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
+            elif command in {RESUME_CONVERSATION, CONTINUE_AS_GUEST}:
+                turn_controller_for(identity).reset()
+                if audio_source is not None:
+                    audio_source.clear_queue()
+                try:
+                    decision = controller.resume_conversation()
+                except RuntimeError:
+                    await send_event(
+                        identity,
+                        event_type="state",
+                        state=VoiceAgentState.ERROR,
+                        message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
+                    )
+                    return
+                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
             else:
                 return
-            await send_status(identity, decision)
+            await send_status(identity, decision, controller=controller)
 
         asyncio.create_task(handle_auth_command())
 
@@ -443,7 +514,12 @@ async def auth_gate_entrypoint(ctx) -> None:
             asyncio.create_task(process_audio(track, participant))
 
     async def initialize_participant(_ctx, participant) -> None:
-        await send_status(participant.identity, controller_for(participant.identity).current())
+        participant_controller = controller_for(participant.identity)
+        await send_status(
+            participant.identity,
+            participant_controller.current(),
+            controller=participant_controller,
+        )
 
     async def close_voice_dependencies() -> None:
         await asyncio.to_thread(gate.close)

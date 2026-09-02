@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.assistant.events import VoiceAgentState, event_payload
+from app.assistant.events import VoiceAgentSessionStatus, VoiceAgentState, event_payload
 
 
 def test_voice_agent_event_contains_only_browser_safe_fields() -> None:
@@ -36,3 +36,20 @@ def test_voice_agent_event_can_carry_ordering_metadata_without_private_fields() 
 
     assert payload["sequence"] == 4
     assert payload["is_final"] is False
+
+
+def test_session_status_is_browser_safe_and_separate_from_turn_state() -> None:
+    payload = json.loads(
+        event_payload(
+            event_type="session_status",
+            status=VoiceAgentSessionStatus.READY,
+            message="Ready to listen",
+        )
+    )
+
+    assert payload == {
+        "type": "session_status",
+        "message_id": payload["message_id"],
+        "status": "ready",
+        "message": "Ready to listen",
+    }
