@@ -22,6 +22,8 @@ from app.assistant_gateway.google_calendar import (
     GoogleCalendarMcpProvider,
     GoogleCalendarError,
     GoogleOAuthService,
+    LocalGoogleCalendarMcpClient,
+    LocalGoogleCalendarMcpProvider,
 )
 from app.assistant.voice_service import build_account_voice_auth_gate
 from app.assistant_gateway.security import (
@@ -65,8 +67,8 @@ class GatewaySettings(BaseModel):
         workspace = Path(__file__).resolve().parents[2]
         raw_database = os.getenv("WHO_SPEAK_GATEWAY_DATABASE", "app/voice_verification/data/who_speak_gateway.db")
         provider = os.getenv("MCP_PROVIDER", "mock").strip().lower()
-        if provider not in {"mock", "mcp"}:
-            raise ValueError("MCP_PROVIDER must be either 'mock' or 'mcp'.")
+        if provider not in {"mock", "mcp", "local"}:
+            raise ValueError("MCP_PROVIDER must be either 'mock', 'mcp', or 'local'.")
         runtime = os.getenv("VOICE_AGENT_RUNTIME", "livekit").strip().lower()
         if runtime not in {"livekit", "pipecat"}:
             raise ValueError("VOICE_AGENT_RUNTIME must be either 'livekit' or 'pipecat'.")
@@ -169,13 +171,22 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
         encryption_key=active.google_token_encryption_key,
         web_app_url=active.web_app_url,
     )
-    google_calendar = GoogleCalendarMcpProvider(
-        oauth=google_oauth,
-        client=GoogleCalendarMcpClient(
-            endpoint=active.google_mcp_endpoint,
-            timeout_seconds=active.google_mcp_timeout_seconds,
-        ),
-    )
+    if active.mcp_provider == "local":
+        google_calendar = LocalGoogleCalendarMcpProvider(
+            oauth=google_oauth,
+            client=LocalGoogleCalendarMcpClient(
+                endpoint=active.google_mcp_endpoint,
+                timeout_seconds=active.google_mcp_timeout_seconds,
+            ),
+        )
+    else:
+        google_calendar = GoogleCalendarMcpProvider(
+            oauth=google_oauth,
+            client=GoogleCalendarMcpClient(
+                endpoint=active.google_mcp_endpoint,
+                timeout_seconds=active.google_mcp_timeout_seconds,
+            ),
+        )
     # This registry contains only an account-session digest. It is not a
     # bearer token and lets a local Agent prove which room it belongs to.
     agent_sessions: dict[str, dict[str, str]] = {}
@@ -410,7 +421,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     async def start_google_calendar_oauth(
         session: tuple[User, str] = Depends(current_session),
     ) -> RedirectResponse:
-        if active.mcp_provider != "mcp":
+        if active.mcp_provider not in {"mcp", "local"}:
             raise HTTPException(status_code=409, detail="Google Calendar is disabled while MCP_PROVIDER=mock.")
         try:
             url = google_oauth.authorization_url(user=session[0], session_token=session[1])
@@ -497,7 +508,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     @app.post("/internal/calendar/list-events")
     async def internal_list_events(payload: InternalCalendarRequest, request: Request) -> dict[str, object]:
         user = resolve_agent_session(internal_calendar_payload(payload), request)
-        if active.mcp_provider != "mcp":
+        if active.mcp_provider not in {"mcp", "local"}:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google Calendar MCP is not active.")
         if payload.end <= payload.start:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid calendar time range.")
@@ -519,7 +530,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     @app.post("/internal/calendar/create-event")
     async def internal_create_event(payload: InternalCreateCalendarRequest, request: Request) -> dict[str, object]:
         user = resolve_agent_session(internal_calendar_payload(payload), request)
-        if active.mcp_provider != "mcp":
+        if active.mcp_provider not in {"mcp", "local"}:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google Calendar MCP is not active.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Creating Google Calendar events is not enabled in this rollout.")
 

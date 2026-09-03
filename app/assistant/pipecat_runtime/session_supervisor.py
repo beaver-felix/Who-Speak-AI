@@ -169,17 +169,17 @@ def create_supervisor_app(settings: PipecatSupervisorSettings | None = None) -> 
                 detail="OPENAI_API_KEY is required before starting the conversational Pipecat runtime.",
             )
         provider = os.getenv("MCP_PROVIDER", "mock").strip().lower()
-        if provider not in {"mock", "mcp"}:
+        if provider not in {"mock", "mcp", "local"}:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP_PROVIDER must be either mock or mcp.",
+                detail="MCP_PROVIDER must be either mock, mcp, or local.",
             )
         if provider == "mock" and os.getenv("MOCK_CALENDAR_ENABLED", "true").strip().lower() not in {"1", "true", "yes", "on"}:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Mock calendar is disabled.",
             )
-        if provider == "mcp" and len(os.getenv("PIPECAT_SUPERVISOR_SECRET", "").strip()) < 32:
+        if provider in {"mcp", "local"} and len(os.getenv("PIPECAT_SUPERVISOR_SECRET", "").strip()) < 32:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="PIPECAT_SUPERVISOR_SECRET is required for MCP tool calls.",

@@ -293,7 +293,10 @@ async def run_pipecat_session(
             params=SmartTurnParams(
                 stop_secs=active.vad_silence_seconds,
                 pre_speech_ms=active.smart_turn_pre_speech_ms,
-                max_duration_secs=min(active.vad_maximum_seconds, 8.0),
+                # Respect the application turn boundary. The former 8-second
+                # cap split a continuous, otherwise valid utterance even when
+                # VOICE_VAD_MAXIMUM_SECONDS allowed it to continue.
+                max_duration_secs=active.vad_maximum_seconds,
             ),
         ),
         max_wait_seconds=active.smart_turn_max_wait_seconds,

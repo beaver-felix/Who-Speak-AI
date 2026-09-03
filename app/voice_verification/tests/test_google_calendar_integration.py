@@ -12,6 +12,7 @@ from app.assistant_gateway.google_calendar import (
     GOOGLE_REQUIRED_CALENDAR_SCOPES,
     GoogleCalendarMcpProvider,
     GoogleOAuthService,
+    LocalGoogleCalendarMcpClient,
     TokenCipher,
     _sanitize_mcp_events,
 )
@@ -116,6 +117,17 @@ def test_google_provider_returns_non_demo_result() -> None:
     assert result.provider == "google_mcp"
     assert result.demo is False
     assert result.user_id == "user-a"
+
+
+def test_local_mcp_datetime_uses_application_timezone_without_microseconds() -> None:
+    client = LocalGoogleCalendarMcpClient(
+        endpoint="http://localhost:3000",
+        timezone_name="Asia/Ho_Chi_Minh",
+    )
+
+    formatted = client._mcp_datetime(datetime(2026, 9, 3, 17, 12, 34, 987654, tzinfo=UTC))
+
+    assert formatted == "2026-09-04T00:12:34"
 
 
 def test_agent_gateway_facade_signs_request_and_resolves_local_account() -> None:

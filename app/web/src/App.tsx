@@ -143,10 +143,11 @@ function Workspace({ user, setUser }: { user: CurrentUser; setUser: (value: Curr
   const [capabilities, setCapabilities] = useState<AgentCapabilities | null>(null)
   async function logout() { await api.logout(); setUser(null) }
   useEffect(() => { void api.capabilities().then(setCapabilities).catch(() => setCapabilities(null)) }, [])
-  const usingGoogleMcp = capabilities?.mcp_provider === 'mcp'
+  const usingGoogleMcp = capabilities?.mcp_provider === 'mcp' || capabilities?.mcp_provider === 'local'
+  const usingLocalMcp = capabilities?.mcp_provider === 'local'
   return <main className="shell">
     <header className="topbar"><div><p className="eyebrow">Who Speak AI</p><h1>Local voice workspace</h1></div><div className="account"><span>{user.display_name}</span><button className="link" onClick={() => void logout()}>Sign out</button></div></header>
-    <section className="intro"><p>Account: {user.email}</p><p className="demo">{usingGoogleMcp ? 'Google Calendar MCP configured · tokens stay on the gateway.' : 'Mock MCP active · no Google account is connected.'}</p></section>
+    <section className="intro"><p>Account: {user.email}</p><p className="demo">{usingGoogleMcp ? (usingLocalMcp ? 'Self-hosted Google Calendar MCP configured · tokens stay on the local MCP server.' : 'Google Calendar MCP configured · tokens stay on the gateway.') : 'Mock MCP active · no Google account is connected.'}</p></section>
     {!user.voice_enrolled && enrollOpen ? <Enrollment user={user} onComplete={() => { setEnrollOpen(false); setUser({ ...user, voice_enrolled: true }) }} /> : <><LiveKitPanel />{usingGoogleMcp ? <GoogleCalendarCard /> : <section className="card subtle"><h2>Mock Calendar Provider</h2><p><strong>Demo calendar data.</strong> The Agent may use it only after trusted voice authentication. It never accesses Google Calendar in this phase.</p>{user.voice_enrolled && <button className="secondary" type="button" onClick={() => setEnrollOpen(true)}>Re-enroll voice</button>}</section>}</>}
   </main>
 }

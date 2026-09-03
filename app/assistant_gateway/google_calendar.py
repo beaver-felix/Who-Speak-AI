@@ -10,10 +10,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -330,6 +332,140 @@ class GoogleCalendarMcpClient:
                     ) from error
                 raise GoogleCalendarError("Google Calendar MCP is temporarily unavailable.") from error
         raise GoogleCalendarError("Google Calendar MCP is temporarily unavailable.")
+
+
+class LocalGoogleCalendarMcpClient:
+    """Client for the self-hosted nspady MCP server.
+
+    The self-hosted server manages its own OAuth token store and exposes the
+    MCP endpoint at the HTTP server root.  This adapter deliberately resolves
+    an account by email before calling a tool so a local multi-account store
+    cannot silently serve the wrong Google account to Who Speak.
+    """
+
+    def __init__(
+        self,
+        *,
+        endpoint: str,
+        timeout_seconds: float = 8.0,
+        timezone_name: str | None = None,
+    ) -> None:
+        self._endpoint = endpoint.rstrip("/")
+        self._timeout_seconds = timeout_seconds
+        selected_timezone = (timezone_name or os.getenv("VOICE_DEFAULT_TIMEZONE", "Asia/Ho_Chi_Minh")).strip()
+        try:
+            self._timezone = ZoneInfo(selected_timezone)
+        except ZoneInfoNotFoundError as error:
+            raise ValueError(f"Unknown local Google Calendar MCP timezone: {selected_timezone}") from error
+        self._timezone_name = selected_timezone
+
+    async def account_for_email(self, email: str) -> str | None:
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+                response = await client.get(f"{self._endpoint}/api/accounts")
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, ValueError) as error:
+            raise GoogleCalendarError("Local Google Calendar MCP server is unavailable.") from error
+
+        accounts = payload.get("accounts") if isinstance(payload, dict) else None
+        if not isinstance(accounts, list):
+            raise GoogleCalendarError("Local Google Calendar MCP returned invalid account data.")
+        normalized = email.strip().casefold()
+        matches = [
+            item for item in accounts
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("email"), str)
+            and item["email"].strip().casefold() == normalized
+            and item.get("status") == "active"
+        ]
+        if len(matches) != 1:
+            return None
+        return matches[0]["id"]
+
+    async def list_events(
+        self,
+        *,
+        account: str,
+        start: datetime,
+        end: datetime,
+    ) -> Any:
+        try:
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamable_http_client
+        except ImportError as error:
+            raise GoogleCalendarError("Install the MCP Python SDK before enabling Google Calendar.") from error
+
+        arguments = {
+            "account": account,
+            "calendarId": "primary",
+            # The self-hosted nspady server validates this field without
+            # fractional seconds.  It receives the IANA timezone separately,
+            # so send a local wall-clock value rather than Agent-side UTC.
+            "timeMin": self._mcp_datetime(start),
+            "timeMax": self._mcp_datetime(end),
+            "timeZone": self._timezone_name,
+        }
+        try:
+            logger.info(
+                "local_google_mcp_call_started tool=list-events account=%s start=%s end=%s",
+                account,
+                start.isoformat(),
+                end.isoformat(),
+            )
+            async with httpx.AsyncClient(timeout=self._timeout_seconds) as http_client:
+                async with streamable_http_client(self._endpoint, http_client=http_client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        return await session.call_tool("list-events", arguments=arguments)
+        except (httpx.TimeoutException, httpx.NetworkError) as error:
+            raise GoogleCalendarError("Local Google Calendar MCP server timed out.") from error
+        except GoogleCalendarError:
+            raise
+        except Exception as error:
+            logger.exception(
+                "local_google_mcp_call_failed tool=list-events account=%s error_type=%s",
+                account,
+                type(error).__name__,
+            )
+            raise GoogleCalendarError("Local Google Calendar MCP could not read your events.") from error
+
+    def _mcp_datetime(self, value: datetime) -> str:
+        """Format an aware instant for nspady's local-time MCP schema."""
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Calendar tool timestamps must be timezone-aware.")
+        return value.astimezone(self._timezone).replace(tzinfo=None, microsecond=0).isoformat()
+
+
+class LocalGoogleCalendarMcpProvider:
+    """Gateway provider for a local nspady MCP server.
+
+    VoiceAuth and the Who Speak Google connection remain required.  The local
+    MCP token is used only after its account email matches that connection.
+    """
+
+    def __init__(self, *, oauth: GoogleOAuthService, client: LocalGoogleCalendarMcpClient) -> None:
+        self._oauth = oauth
+        self._client = client
+
+    async def list_events(self, *, user_id: str, start: datetime, end: datetime) -> CalendarResult:
+        connection = self._oauth.status(user_id)
+        email = connection.get("email")
+        if connection.get("status") != "active" or not isinstance(email, str):
+            raise GoogleCalendarError("Connect Google Calendar before asking about personal events.")
+        account = await self._client.account_for_email(email)
+        if account is None:
+            raise GoogleCalendarError(
+                "The local Google Calendar MCP account does not match your connected Google account. "
+                "Authenticate the same account with the local MCP server."
+            )
+        result = await self._client.list_events(account=account, start=start, end=end)
+        events = _sanitize_mcp_events(result, user_id)
+        return CalendarResult("google_mcp", False, user_id, tuple(events))
+
+    async def create_event(self, *, user_id: str, title: str, start: datetime, end: datetime) -> CalendarResult:
+        raise CalendarProviderError("Creating Google Calendar events is not enabled in this rollout.")
 
 
 class GoogleCalendarMcpProvider:

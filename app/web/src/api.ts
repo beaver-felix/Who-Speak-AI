@@ -13,7 +13,7 @@ export type GoogleCalendarStatus = {
 }
 export type AgentCapabilities = {
   user_id: string
-  mcp_provider: 'mock' | 'mcp'
+  mcp_provider: 'mock' | 'mcp' | 'local'
   mock_calendar: boolean
   google_calendar: GoogleCalendarStatus
 }

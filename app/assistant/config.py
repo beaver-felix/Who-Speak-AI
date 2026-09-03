@@ -71,8 +71,11 @@ class LocalAgentSettings:
         auth_challenge_seconds = float(os.getenv("VOICE_AUTH_CHALLENGE_SECONDS", "5"))
         auth_resume_guard_seconds = float(os.getenv("VOICE_AUTH_RESUME_GUARD_SECONDS", "0.25"))
         vad_min_speech_seconds = float(os.getenv("VOICE_VAD_MIN_SPEECH_SECONDS", "0.3"))
-        vad_silence_seconds = float(os.getenv("VOICE_VAD_SILENCE_SECONDS", "0.45"))
-        vad_maximum_seconds = float(os.getenv("VOICE_VAD_MAXIMUM_SECONDS", "15"))
+        # 200–450 ms is a normal intra-sentence pause in conversational
+        # Vietnamese.  Treating it as a final stop creates several STT turns
+        # from one sentence and can falsely interrupt the response they start.
+        vad_silence_seconds = float(os.getenv("VOICE_VAD_SILENCE_SECONDS", "0.65"))
+        vad_maximum_seconds = float(os.getenv("VOICE_VAD_MAXIMUM_SECONDS", "20"))
         smart_turn_model_path = os.getenv("VOICE_SMART_TURN_MODEL_PATH", "").strip() or None
         whisper_device = os.getenv("VOICE_WHISPER_DEVICE", "cpu").strip() or "cpu"
         whisper_compute_type = os.getenv(

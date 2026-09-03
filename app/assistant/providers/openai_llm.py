@@ -37,6 +37,8 @@ class OpenAIResponsesProvider(LLMProvider):
             raise ValueError("A non-empty local ASR transcript is required.")
         instructions = (
             "You are a helpful voice assistant. Keep answers concise and natural when spoken. "
+            "You will just answer about asking mainly on personalization, like asking the calendar, "
+            "If topic is different, you should answer short, and remind the user about just asking the calendar if needed, "
             "Follow the capability policy. "
             "Use trusted current-time context and Calendar tool results supplied by the application; "
             "never invent dates, times, events, or successful Calendar access. "

@@ -68,3 +68,16 @@ def test_local_agent_settings_expose_streaming_turn_timing(monkeypatch) -> None:
     assert settings.zerotts_warmup is False
     assert settings.tts_queue_max_chunks == 4
     assert settings.tts_max_sentence_chars == 120
+
+
+def test_local_agent_defaults_tolerate_natural_pauses(monkeypatch) -> None:
+    monkeypatch.setenv("LIVEKIT_API_KEY", "devkey")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "secret")
+    monkeypatch.setenv("LIVEKIT_DEV_MODE", "true")
+    monkeypatch.delenv("VOICE_VAD_SILENCE_SECONDS", raising=False)
+    monkeypatch.delenv("VOICE_VAD_MAXIMUM_SECONDS", raising=False)
+
+    settings = LocalAgentSettings.from_environment()
+
+    assert settings.vad_silence_seconds == 0.65
+    assert settings.vad_maximum_seconds == 20
