@@ -61,8 +61,8 @@ RawNet3    & ViMD      & \textbf{3.071} & \textbf{0.2262} & \textbf{99.765} & \t
 
 \textbf{Analysis of Operating Performance.} High overall accuracy values ($>96\%$) reflect the protocol's 100{,}000 impostor trials relative to genuine trials. Therefore, EER, minDCF, and True Acceptance Rate ($\text{TAR}$) at low False Acceptance Rates serve as the discriminative metrics:
 \begin{itemize}
-    \item \textbf{On TidyVoice (Multilingual):} ECAPA-TDNN achieves superior performance across all metrics, reducing EER by 33.4\% relative (3.912\% vs.\ 5.875\%) and minDCF by 36.2\% relative (0.3586 vs.\ 0.5624), while yielding a +17.97\% higher TAR at the frozen security threshold.
-    \item \textbf{On ViMD (Vietnamese Multi-Dialect):} RawNet3 significantly outperforms ECAPA-TDNN, achieving a 19.3\% relative reduction in EER (3.071\% vs.\ 3.804\%) and a 49.9\% relative reduction in minDCF (0.2262 vs.\ 0.4516). At the operational threshold, RawNet3 boosts TAR to 84.453\% (compared to 65.259\% for ECAPA-TDNN) while maintaining a strict 0.075\% FAR.
+    \item \textbf{On TidyVoice (Multilingual):} ECAPA-TDNN achieves superior performance across all metrics, reducing EER by 33.4\% relative (3.912\% vs.\ 5.875\%) and minDCF by 36.2\% relative (0.3586 vs.\ 0.5624), while yielding a +17.97 percentage points higher TAR at the frozen security threshold.
+    \item \textbf{On ViMD (Vietnamese Multi-Dialect):} RawNet3 outperforms ECAPA-TDNN, achieving a 19.3\% relative reduction in EER (3.071\% vs.\ 3.804\%) and a 49.9\% relative reduction in minDCF (0.2262 vs.\ 0.4516). At the operational threshold, RawNet3 boosts TAR to 84.453\% (compared to 65.259\% for ECAPA-TDNN) while maintaining a strict 0.075\% FAR.
 \end{itemize}
 
 Table~\ref{tab:tar-at-far} provides a fine-grained evaluation of authentication security, detailing the True Acceptance Rate at varying target False Acceptance Rates ($\text{TAR@FAR}$).
@@ -106,9 +106,20 @@ RawNet3    & \textbf{16.28~M} & \textbf{8.840}  & \textbf{12.884} \\
 \label{tab:latency-benchmarks}
 \end{table}
 
-\textbf{Deployment Selection Rationale.} Based on our empirical findings, **RawNet3 fine-tuned on ViMD (Epoch~2)** is selected as the verification engine for the Who-Speak-AI virtual assistant:
+\textbf{Deployment Selection Rationale.} Model selection is based on Validation evidence and deployment constraints; Test results are used only for final confirmation. \textbf{RawNet3 fine-tuned on ViMD (Epoch~2)} is selected as the verification engine for the Who-Speak-AI virtual assistant:
+
 \begin{enumerate}
-    \item \textbf{Target-Domain Alignment:} The intended application is a Vietnamese-language conversational assistant. RawNet3 demonstrates clear superiority in modeling regional Vietnamese acoustic and dialectal nuances, obtaining 3.071\% EER and 0.2262 minDCF.
-    \item \textbf{High Security Margin:} At the operational security threshold ($\text{FAR} \le 0.1\%$), RawNet3 delivers an 84.45\% True Acceptance Rate, significantly reducing user friction (lower False Rejection) during voice authentication compared to ECAPA-TDNN (65.26\%).
+    \item \textbf{Validation Evidence and Target-Domain Alignment:} The intended application targets Vietnamese speech, making ViMD the priority domain. On ViMD Validation, RawNet3 achieved 2.692\% EER and 0.2446 minDCF, outperforming ECAPA-TDNN at 3.936\% EER and 0.4503 minDCF.
+
+    \item \textbf{Final Test Confirmation:} With the Validation-selected checkpoint and frozen Validation threshold, ViMD Test confirms the same ranking: RawNet3 achieved 3.071\% EER, 0.2262 minDCF, 0.075\% FAR, and 84.453\% TAR.
+
     \item \textbf{Efficiency Profile:} RawNet3 contains 21.6\% fewer parameters (16.28M vs.\ 20.77M) and exhibits 26.5\% lower median GPU latency (8.84~ms vs.\ 12.02~ms), preserving critical compute headroom for concurrent ASR, LLM reasoning, and TTS synthesis.
 \end{enumerate}
+
+\subsection{Limitations}
+
+The experiment face multiple limitations: single-seed training (42), three epochs with early stopping, deterministic utterance per speaker per epoch; No hyperparameter grid search, margin ablation, scheduler ablation, augmentation study, multi-seed variance estimate, or CPU benchmark was performed.
+
+The reported latency is model-only latency on a Tesla T4 and excludes audio decoding, resampling, application logic, networking, ASR, and TTS. The security threshold was calibrated on ViMD rather than live application microphones and therefore serves only as an evidence-based initial value.
+
+WavLM+MHFA was implemented and attempted but excluded from the final comparison because no complete accepted run passed the evidence validator: one attempt produced non-finite FP16 training embeddings, and a later attempt produced non-finite evidence during ViMD Final Test. No WavLM checkpoint or metric is reported as an accepted result.

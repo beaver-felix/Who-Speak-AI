@@ -79,7 +79,7 @@ Early stopping patience & 1 epoch (tie: minDCF) & 1 epoch (tie: minDCF) \\
 \label{tab:training-hyperparams}
 \end{table}
 
-\textbf{Resource-Constrained Protocol.} To complete all experimental runs within an 8-hour computational budget on an NVIDIA Tesla T4 GPU, training is conducted with one deterministic utterance per speaker per epoch (3{,}666 examples/epoch for TidyVoice, 10{,}291 examples/epoch for ViMD). Batch size is fixed at 24 following memory stress-testing against the 10{,}291-class ViMD projection layer, preserving a 20\% safety margin below GPU VRAM limits.
+\textbf{Resource-Constrained Protocol.} To operate within the remaining project-time budget, training uses one deterministic utterance per speaker per epoch (3{,}666 examples/epoch for TidyVoice and 10{,}291 examples/epoch for ViMD). Memory calibration with the 10{,}291-class ViMD head tested batch sizes 4, 8, 16, 24, and 32; batch size 32 was the largest tested passing size, not a measured VRAM limit. The predefined rule selected a batch size no greater than 80\% of that value, resulting in batch size 24, which was then confirmed by a three-batch real-audio optimization gate. Each architecture's two dataset runs were executed concurrently in a Kaggle T4$\times$2 session, with each Dataset assigned to it's single GPU.
 
 \subsection{Evaluation Protocol and Metrics}
 
