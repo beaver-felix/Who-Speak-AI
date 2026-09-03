@@ -1,0 +1,42 @@
+[model]
+name = "rawnet3"
+source_id = "jungjee/RawNet3"
+revision = "c89102eea20c3f96917c434de673c0ace0caddc0"
+embedding_dim = 256
+initialization = "pretrained_speaker_encoder"
+
+[model.architecture]
+source_id = "clovaai/voxceleb_trainer"
+revision = "f51bab870672a9b0b50fa158b4e30f329e7866d7"
+encoder_type = "ECA"
+sinc_stride = 10
+
+[model.audit]
+parameter_count = 16280322
+checkpoint_sha256 = "1ab283bcdf776bfceceea18240e56a8756835b1911b04f9c44f347d47c09f90c"
+strict_checkpoint_compatibility = "passed"
+
+[model.configuration_status]
+training_recipe = "initial_screening_candidate_pending_validation"
+
+[optimization]
+name = "adam"
+trainable_scope = "complete_encoder_and_new_head"
+encoder_learning_rate = 0.0001
+head_learning_rate = 0.0001
+weight_decay = 0.00005
+selection_status = "pretrained_finetuning_hypothesis_pending_validation"
+
+[training.batch]
+size = 24
+calibrated_largest_passing_size = 32
+selection_status = "multibatch_validated_ready_for_epoch_training"
+calibration_artifact = "results/model_audit/training_memory/rawnet3_vimd_classes_t4.json"
+validation_artifact = "results/model_audit/multibatch_training/rawnet3_tidyvoice_t4.json"
+
+[training.audio]
+segment_samples = 48240
+
+[evaluation]
+segment_samples = 64240
+utterance_batch_size = 4

@@ -1,0 +1,41 @@
+{
+  "model": {
+    "embedding_dim": 192,
+    "name": "ecapa_tdnn",
+    "parameter_count": 20767552,
+    "revision": "0f99f2d0ebe89ac095bcc5903c4dd8f72b367286",
+    "source_id": "speechbrain/spkrec-ecapa-voxceleb",
+    "trainable_parameter_count": 20767552
+  },
+  "result": {
+    "checks": {
+      "embedding_finite": true,
+      "embedding_l2_normalized": true,
+      "embedding_shape": true,
+      "encoder_parameter_gradient_nonzero": true,
+      "encoder_parameter_gradient_present": true,
+      "encoder_parameter_gradients_finite": true,
+      "input_gradient_finite": true,
+      "input_gradient_nonzero": true,
+      "repeat_cosine_at_least_0_99999": true
+    },
+    "embedding_norm": 1.0,
+    "embedding_shape": [
+      1,
+      192
+    ],
+    "repeat_cosine_similarity": 1.0
+  },
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "torch_version": "2.10.0+cu128"
+  },
+  "sample": {
+    "duration_seconds": 3.2608125,
+    "path": "example1.wav",
+    "samples": 52173,
+    "waveform_sha256": "48aedc3a10b14b49ebe8da2efd1dd91cbe7dbbaf58278732e7fdb04f6d6cc1e9"
+  },
+  "schema_version": 1
+}

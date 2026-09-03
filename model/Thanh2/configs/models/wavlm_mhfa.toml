@@ -1,0 +1,61 @@
+[model]
+name = "wavlm_mhfa"
+source_id = "theolepage/wavlm_ssl_sv"
+revision = "bfb8527de83b5347fb81b1e9e31be241656ca103"
+embedding_dim = 256
+initialization = "pretrained_wavlm_and_mhfa"
+
+[model.architecture]
+wavlm_layers = 12
+wavlm_hidden_dim = 768
+mhfa_parameter_count = 2302554
+total_parameter_count = 96684490
+
+[model.audit]
+wavlm_parameter_count = 94381936
+wavlm_checkpoint_sha256 = "fcbcf2a94def92e90e086bb0727275d53b75a9c0e483e2abfa560ac951986b6d"
+strict_checkpoint_compatibility = "passed"
+
+[model.pretrained_speaker_checkpoint]
+filename = "model000000018.model"
+google_drive_file_id = "1RabuRETASqhh39K8weSoNkBa5DGRvgyx"
+sha256 = "0178a115dc0a43a94a71287e51d1df5016c2aeefc04169548dad40ac8a6e67da"
+wavlm_tensor_count = 248
+mhfa_tensor_count = 10
+source_classifier_policy = "exclude"
+
+[model.reference_recipe]
+training_frames = 300
+evaluation_frames = 400
+aam_softmax_margin = 0.2
+aam_softmax_scale = 30
+transformer_learning_rate = 0.00002
+mhfa_learning_rate = 0.005
+epochs = 15
+
+[model.configuration_status]
+training_recipe = "source_aligned_candidate_pending_validation"
+
+[optimization]
+name = "adamw"
+trainable_scope = "transformer_layers_mhfa_and_new_head"
+transformer_learning_rate = 0.00002
+backend_learning_rate = 0.005
+head_learning_rate = 0.005
+layerwise_learning_rate_decay = 1.0
+weight_decay = 0.0
+selection_status = "pinned_source_base_recipe_pending_validation"
+
+[training.batch]
+size = 6
+calibrated_largest_passing_size = 8
+selection_status = "multibatch_validated_ready_for_epoch_training"
+calibration_artifact = "results/model_audit/training_memory/wavlm_mhfa_vimd_classes_t4.json"
+validation_artifact = "results/model_audit/multibatch_training/wavlm_mhfa_tidyvoice_t4.json"
+
+[training.audio]
+segment_samples = 48240
+
+[evaluation]
+segment_samples = 64240
+utterance_batch_size = 2

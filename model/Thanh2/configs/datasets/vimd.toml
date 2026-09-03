@@ -1,0 +1,19 @@
+[data]
+name = "vimd"
+source_id = "dullahn/vimd-dataset"
+storage = "parquet"
+kaggle_root = "/kaggle/input/datasets/dullahn/vimd-dataset"
+split_protocol = "results/data_audit/vimd_protocol_summary.json"
+
+[data.canonical_counts]
+train_utterances = 15023
+validation_utterances = 1898
+test_utterances = 2026
+
+[data.parquet]
+metadata_batch_size = 4096
+worker_row_group_cache = 1
+shard_aware_access_required = true
+
+[loader]
+group_by_audio_path = true

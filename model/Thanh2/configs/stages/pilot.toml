@@ -1,0 +1,17 @@
+[experiment]
+stage = "pilot"
+
+[training.epoch_sampling]
+max_utterances_per_speaker = 1
+max_speakers_per_epoch = 512
+
+[training.lifecycle]
+max_epochs = 1
+early_stopping_patience = 1
+checkpoint_every_steps = 100
+
+[evaluation]
+segment_count = 1
+
+[tracking]
+mode = "offline"

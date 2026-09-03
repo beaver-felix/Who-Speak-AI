@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "target_sample_rate": 16000,
+  "tidyvoice": {
+    "canonical_sample_rate": 16000,
+    "canonical_samples": 122496,
+    "duration_seconds": 7.656,
+    "finite": true,
+    "load_seconds": 0.016188,
+    "original_channels": 1,
+    "original_sample_rate": 16000,
+    "source": "TidyVoiceX_Train/TidyVoiceX_Train/id010001/cy/cy_30308905.wav",
+    "waveform_sha256": "4f0ed3b95b1f1bb6f339f5bcb3db4d6dc0da79120c9d27942e35598a342c5c5f"
+  },
+  "vimd": {
+    "canonical_sample_rate": 16000,
+    "canonical_samples": 147824,
+    "duration_seconds": 9.239,
+    "finite": true,
+    "load_seconds": 4.410327,
+    "original_channels": 2,
+    "original_sample_rate": 44100,
+    "repeat_waveform_equal": true,
+    "row_group_reads_after_two_loads": 1,
+    "source": "data/test-00000-of-00014.parquet#row=0",
+    "waveform_sha256": "084f1e72b940643f5cf74f3d3aed09cb088bd49bedb114835ffeef5c8f0e96af"
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "checks": {
+    "all_audio_finite": true,
+    "all_available_groups_updated": true,
+    "all_embeddings_finite": true,
+    "all_gradient_norms_finite": true,
+    "all_losses_finite": true,
+    "all_optimizer_groups_updated_across_gate": true,
+    "all_speakers_are_distinct": true,
+    "all_utterances_are_distinct": true,
+    "loss_scale_never_backed_off": true,
+    "mandatory_groups_updated_each_step": true,
+    "step_count_matches": true
+  },
+  "config_sha256": "df84325195e8aaa3f8c4fa55aeefd567fa299a9df70e8784c2a01a90efabbd39",
+  "data": {
+    "full_training_speaker_count": 3666,
+    "name": "tidyvoice",
+    "one_utterance_per_speaker": true,
+    "segment_samples": 48000,
+    "selected_speaker_count": 72,
+    "selected_utterance_count": 72,
+    "selected_utterance_ids_sha256": "2de4dd8b8e25f8122f37ad8378e22abf28646ecc51816cfcd163e317dd381318"
+  },
+  "model": {
+    "embedding_dim": 192,
+    "name": "ecapa_tdnn",
+    "parameter_count": 20767552
+  },
+  "purpose": "multirecord_multibatch_training_gate_not_performance",
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "device_name": "Tesla T4",
+    "torch_version": "2.10.0+cu128"
+  },
+  "schema_version": 1,
+  "steps": [
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 24,
+      "distinct_speakers": 24,
+      "distinct_utterances": 24,
+      "elapsed_seconds": 1.2219665750017157,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 19.614662170410156,
+      "groups_without_nonzero_gradient": [],
+      "loss": 17.03021240234375,
+      "peak_allocated_bytes": 1938817536,
+      "peak_reserved_bytes": 2057306112,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 1,
+      "updated_groups": [
+        "encoder",
+        "aam_softmax_head"
+      ]
+    },
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 24,
+      "distinct_speakers": 24,
+      "distinct_utterances": 24,
+      "elapsed_seconds": 0.20231709299878275,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 19.896297454833984,
+      "groups_without_nonzero_gradient": [],
+      "loss": 16.516477584838867,
+      "peak_allocated_bytes": 2113274368,
+      "peak_reserved_bytes": 2434793472,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 2,
+      "updated_groups": [
+        "encoder",
+        "aam_softmax_head"
+      ]
+    },
+    {
+      "accuracy": 0.0,
+      "audio_finite": true,
+      "batch_size": 24,
+      "distinct_speakers": 24,
+      "distinct_utterances": 24,
+      "elapsed_seconds": 0.17087531399920408,
+      "embeddings_finite": true,
+      "gradient_norm_before_clipping": 19.90721321105957,
+      "groups_without_nonzero_gradient": [],
+      "loss": 16.22688865661621,
+      "peak_allocated_bytes": 2115798528,
+      "peak_reserved_bytes": 2434793472,
+      "scale_after": 1024.0,
+      "scale_before": 1024.0,
+      "step": 3,
+      "updated_groups": [
+        "encoder",
+        "aam_softmax_head"
+      ]
+    }
+  ],
+  "training": {
+    "batch_size": 24,
+    "gradient_clip_norm": 5.0,
+    "mixed_precision": "fp16",
+    "objective": {
+      "margin": 0.2,
+      "name": "aam_softmax",
+      "scale": 30.0
+    },
+    "optimizer": {
+      "group_names": [
+        "encoder",
+        "aam_softmax_head"
+      ],
+      "group_parameter_counts": [
+        20767552,
+        703872
+      ],
+      "name": "adam"
+    },
+    "steps": 3
+  }
+}

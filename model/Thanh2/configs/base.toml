@@ -1,0 +1,75 @@
+schema_version = 1
+
+[experiment]
+seed = 42
+stage = "unselected"
+
+[audio]
+sample_rate = 16000
+amplitude_normalization = "none"
+channel_policy = "arithmetic_mean"
+resampler = "scipy_resample_poly"
+
+[loader]
+persistent_workers = false
+group_by_audio_path = false
+selection_status = "required_until_epoch_aware_worker_sync"
+
+[reproducibility]
+deterministic_algorithms = true
+cudnn_benchmark = false
+cublas_workspace_config = ":4096:8"
+
+[training]
+mixed_precision = "fp16"
+gradient_clip_norm = 5.0
+
+[training.epoch_sampling]
+name = "deterministic_speaker_cap"
+max_utterances_per_speaker = 4
+max_speakers_per_epoch = 0
+selection_status = "accepted_balance_and_runtime_control"
+
+[training.lifecycle]
+max_epochs = 15
+early_stopping_patience = 3
+minimum_eer_improvement = 0.001
+checkpoint_every_steps = 500
+num_workers = 2
+pin_memory = true
+initial_loss_scale = 1024.0
+
+[training.schedule]
+name = "constant"
+selection_status = "pilot_control_pending_validation"
+
+[training.objective]
+name = "aam_softmax"
+margin = 0.2
+scale = 30.0
+easy_margin = false
+selection_status = "shared_control_accepted_pending_margin_ablation"
+
+[verification]
+seed = 42
+max_genuine_per_speaker = 20
+impostor_trials_per_split = 100000
+
+[evaluation]
+segment_count = 1
+num_workers = 2
+pin_memory = true
+mixed_precision = "fp16"
+validation_frequency_epochs = 1
+
+[tracking]
+project = "who-speak-ai"
+mode = "offline"
+
+[metrics]
+far_targets = [0.05, 0.01, 0.001, 0.0001]
+
+[metrics.min_dcf]
+p_target = 0.01
+c_miss = 1.0
+c_false_alarm = 1.0

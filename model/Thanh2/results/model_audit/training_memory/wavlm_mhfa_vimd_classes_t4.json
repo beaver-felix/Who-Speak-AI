@@ -1,0 +1,187 @@
+{
+  "config_sha256": "cda92164886e331d319cfafaed1ea15c0d69359997877b4301d75ab09fa39117",
+  "largest_passing_batch_size": 8,
+  "measurements": [
+    {
+      "accuracy": 0.0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "gradient_norm_finite": true,
+          "loss_finite": true,
+          "optimizer_step_applied": true,
+          "scale_after": 1024.0,
+          "scale_before": 1024.0
+        }
+      ],
+      "batch_size": 1,
+      "device_free_bytes_after_step": 13816889344,
+      "device_total_bytes": 15636037632,
+      "gradient_norm_before_clipping": 144.59852600097656,
+      "gradient_norm_finite": true,
+      "loss": 15.92625617980957,
+      "loss_finite": true,
+      "optimizer_step_applied": true,
+      "peak_allocated_bytes": 1447621120,
+      "peak_reserved_bytes": 1667235840,
+      "status": "passed"
+    },
+    {
+      "accuracy": 0.5,
+      "attempts": [
+        {
+          "attempt": 1,
+          "gradient_norm_finite": true,
+          "loss_finite": true,
+          "optimizer_step_applied": true,
+          "scale_after": 1024.0,
+          "scale_before": 1024.0
+        }
+      ],
+      "batch_size": 2,
+      "device_free_bytes_after_step": 13661700096,
+      "device_total_bytes": 15636037632,
+      "gradient_norm_before_clipping": 82.76243591308594,
+      "gradient_norm_finite": true,
+      "loss": 14.572617530822754,
+      "loss_finite": true,
+      "optimizer_step_applied": true,
+      "peak_allocated_bytes": 1561572352,
+      "peak_reserved_bytes": 1822425088,
+      "status": "passed"
+    },
+    {
+      "accuracy": 0.25,
+      "attempts": [
+        {
+          "attempt": 1,
+          "gradient_norm_finite": true,
+          "loss_finite": true,
+          "optimizer_step_applied": true,
+          "scale_after": 1024.0,
+          "scale_before": 1024.0
+        }
+      ],
+      "batch_size": 4,
+      "device_free_bytes_after_step": 13496025088,
+      "device_total_bytes": 15636037632,
+      "gradient_norm_before_clipping": 93.4660415649414,
+      "gradient_norm_finite": true,
+      "loss": 20.11556053161621,
+      "loss_finite": true,
+      "optimizer_step_applied": true,
+      "peak_allocated_bytes": 1816505344,
+      "peak_reserved_bytes": 1988100096,
+      "status": "passed"
+    },
+    {
+      "accuracy": 0.0,
+      "attempts": [
+        {
+          "attempt": 1,
+          "gradient_norm_finite": true,
+          "loss_finite": true,
+          "optimizer_step_applied": true,
+          "scale_after": 1024.0,
+          "scale_before": 1024.0
+        }
+      ],
+      "batch_size": 6,
+      "device_free_bytes_after_step": 13410041856,
+      "device_total_bytes": 15636037632,
+      "gradient_norm_before_clipping": 83.73627471923828,
+      "gradient_norm_finite": true,
+      "loss": 19.821731567382812,
+      "loss_finite": true,
+      "optimizer_step_applied": true,
+      "peak_allocated_bytes": 2004471296,
+      "peak_reserved_bytes": 2074083328,
+      "status": "passed"
+    },
+    {
+      "accuracy": 0.125,
+      "attempts": [
+        {
+          "attempt": 1,
+          "gradient_norm_finite": true,
+          "loss_finite": true,
+          "optimizer_step_applied": true,
+          "scale_after": 1024.0,
+          "scale_before": 1024.0
+        }
+      ],
+      "batch_size": 8,
+      "device_free_bytes_after_step": 13135314944,
+      "device_total_bytes": 15636037632,
+      "gradient_norm_before_clipping": 91.63658142089844,
+      "gradient_norm_finite": true,
+      "loss": 18.864334106445312,
+      "loss_finite": true,
+      "optimizer_step_applied": true,
+      "peak_allocated_bytes": 2267019776,
+      "peak_reserved_bytes": 2348810240,
+      "status": "passed"
+    }
+  ],
+  "model": {
+    "embedding_dim": 256,
+    "name": "wavlm_mhfa",
+    "parameter_count": 96684490
+  },
+  "objective": {
+    "margin": 0.2,
+    "name": "aam_softmax",
+    "num_classes": 10291,
+    "scale": 30.0
+  },
+  "optimization": {
+    "group_names": [
+      "transformer_layer_00",
+      "transformer_layer_01",
+      "transformer_layer_02",
+      "transformer_layer_03",
+      "transformer_layer_04",
+      "transformer_layer_05",
+      "transformer_layer_06",
+      "transformer_layer_07",
+      "transformer_layer_08",
+      "transformer_layer_09",
+      "transformer_layer_10",
+      "transformer_layer_11",
+      "mhfa",
+      "aam_softmax_head"
+    ],
+    "group_parameter_counts": [
+      7092244,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      7088404,
+      2302554,
+      2634496
+    ],
+    "name": "adamw",
+    "weight_decay": 0.0
+  },
+  "purpose": "memory_calibration_not_model_selection",
+  "runtime": {
+    "cuda_version": "12.8",
+    "device": "cuda:0",
+    "device_name": "Tesla T4",
+    "mixed_precision": "fp16",
+    "torch_version": "2.10.0+cu128"
+  },
+  "sample": {
+    "crop_samples": 48240,
+    "path": "/kaggle/input/datasets/dullahn/mozzila-tidyvoice/TidyVoiceX_ASV/TidyVoiceX_Train/TidyVoiceX_Train/id010001/cy/cy_30308905.wav"
+  },
+  "schema_version": 2,
+  "selection_rule": "A passing size requires finite loss and gradient norm plus a verified optimizer update. Choose at most 80% of the largest passing size, then confirm with a multi-batch mini-run; calibration alone does not select a batch."
+}

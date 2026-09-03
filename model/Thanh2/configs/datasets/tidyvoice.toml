@@ -1,0 +1,11 @@
+[data]
+name = "tidyvoice"
+source_id = "dullahn/mozzila-tidyvoice"
+storage = "file"
+kaggle_root = "/kaggle/input/datasets/dullahn/mozzila-tidyvoice/TidyVoiceX_ASV"
+split_protocol = "results/data_audit/tidyvoice_dev_protocol.json"
+
+[data.canonical_counts]
+train_utterances = 262268
+validation_utterances = 29720
+test_utterances = 29723

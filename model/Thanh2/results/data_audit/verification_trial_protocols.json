@@ -1,0 +1,73 @@
+{
+  "methodology_notes": [
+    "Validation trials select thresholds; Test trials report final metrics.",
+    "All three models use identical model-independent trial lists.",
+    "Genuine-pair caps limit domination by high-resource speakers.",
+    "Uniform speaker-pair sampling limits utterance-count bias.",
+    "One hundred thousand impostors give 0.001 percentage-point FAR resolution.",
+    "Trial lists are regenerated deterministically and verified by SHA-256."
+  ],
+  "protocols": {
+    "tidyvoice": {
+      "test": {
+        "genuine_trials": 7898,
+        "impostor_far_resolution_fraction": 1e-05,
+        "impostor_far_resolution_percent": 0.001,
+        "impostor_trials": 100000,
+        "manifest_speakers": 404,
+        "manifest_utterances": 29723,
+        "split": "test",
+        "total_trials": 107898,
+        "trial_list_sha256": "6a1743b1aa982505e5639a3c324e2c8d840e16d4a3d098a06b6b1e38265d45b3",
+        "trial_utterances": 25901
+      },
+      "validation": {
+        "genuine_trials": 7954,
+        "impostor_far_resolution_fraction": 1e-05,
+        "impostor_far_resolution_percent": 0.001,
+        "impostor_trials": 100000,
+        "manifest_speakers": 404,
+        "manifest_utterances": 29720,
+        "split": "validation",
+        "total_trials": 107954,
+        "trial_list_sha256": "0fe5a2b24c05dc89d9b49dec75b945844863987a9c51e426bc139c6ae2e5e9be",
+        "trial_utterances": 25895
+      }
+    },
+    "vimd": {
+      "test": {
+        "genuine_trials": 1042,
+        "impostor_far_resolution_fraction": 1e-05,
+        "impostor_far_resolution_percent": 0.001,
+        "impostor_trials": 100000,
+        "manifest_speakers": 1344,
+        "manifest_utterances": 2026,
+        "split": "test",
+        "total_trials": 101042,
+        "trial_list_sha256": "ae5da0dac25c185ffa3930c32fff5802aee6113d8e225a54d4677a70ef1a222f",
+        "trial_utterances": 2026
+      },
+      "validation": {
+        "genuine_trials": 863,
+        "impostor_far_resolution_fraction": 1e-05,
+        "impostor_far_resolution_percent": 0.001,
+        "impostor_trials": 100000,
+        "manifest_speakers": 1318,
+        "manifest_utterances": 1898,
+        "split": "validation",
+        "total_trials": 100863,
+        "trial_list_sha256": "4bac0087282dd94052becc73a7a37b86d13c1995318b8737b4ee80c15c4cb096",
+        "trial_utterances": 1898
+      }
+    }
+  },
+  "schema_version": 1,
+  "settings": {
+    "genuine_sampling": "uniform_unique_pairs_capped_per_speaker",
+    "impostor_sampling": "uniform_speaker_pair_then_uniform_utterance_pair",
+    "impostor_trials_per_dataset_split": 100000,
+    "max_genuine_per_speaker": 20,
+    "pair_order": "canonical_utterance_id_order",
+    "seed": 42
+  }
+}

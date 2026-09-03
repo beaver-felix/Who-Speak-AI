@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "who-speak-ai"
+version = "0.1.0"
+description = "Reproducible speaker-recognition research pipeline."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<10"]
+data = [
+    "numpy>=2.0,<2.1",
+    "pyarrow>=24.0,<25.0",
+    "scipy>=1.16,<1.17",
+    "soundfile>=0.13,<0.14",
+]
+ecapa = [
+    "huggingface-hub>=1.11,<1.12",
+    "speechbrain==1.1.0",
+]
+rawnet3 = [
+    "asteroid-filterbanks==0.4.0",
+    "huggingface-hub>=1.11,<1.12",
+]
+wavlm_mhfa = [
+    "gdown>=5.2,<5.3",
+    "huggingface-hub>=1.11,<1.12",
+]
+tracking = ["wandb==0.26.1"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"speaker_recognition.third_party.clova_rawnet3" = ["LICENSE.md", "SOURCE.md"]
+"speaker_recognition.third_party.theolepage_wavlm_mhfa" = ["LICENSE.md", "SOURCE.md"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["src"]
+testpaths = ["tests"]

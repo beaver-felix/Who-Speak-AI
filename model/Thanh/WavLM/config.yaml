@@ -1,0 +1,62 @@
+# WavLM speaker-verification configuration for Kaggle GPU notebooks.
+# Keep downloaded Hugging Face weights in the Kaggle/HF cache, not in Git.
+
+project:
+  name: wavlm_ssl_speaker_verification
+  seed: 42
+
+dataset:
+  train_manifest: /kaggle/input/speaker-data/manifests/train.csv
+  validation_manifest: /kaggle/input/speaker-data/manifests/validation.csv
+  test_pairs: /kaggle/input/speaker-data/manifests/test_pairs.csv
+  path_column: path
+  speaker_column: speaker_id
+  enrollment_path_column: enrollment_path
+  test_path_column: test_path
+  label_column: label
+
+audio:
+  sample_rate: 16000
+  duration_seconds: 3.0
+  peak_normalize: false
+
+model:
+  pretrained_model_name: microsoft/wavlm-base-plus-sv
+  # xvector uses the checkpoint's pretrained SV head. Alternatives: mean, statistics.
+  pooling: xvector
+  embedding_dim: 512
+  freeze_backbone: true
+  unfreeze_last_n_layers: 0
+  gradient_checkpointing: false
+  am_scale: 30.0
+  am_margin: 0.20
+
+training:
+  batch_size: 4
+  evaluation_batch_size: 4
+  epochs: 10
+  backbone_learning_rate: 0.00001
+  head_learning_rate: 0.0001
+  weight_decay: 0.00001
+  gradient_accumulation_steps: 4
+  gradient_clip_norm: 1.0
+  mixed_precision: fp16
+  use_amp: true
+
+evaluation:
+  target_prior: 0.01
+
+runtime:
+  device: cuda
+  kaggle_gpu: true
+  require_cuda: true
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 1
+  drop_last: true
+
+outputs:
+  metrics_json: ../results/wavlm_metrics.json
+  metrics_csv: ../results/wavlm_metrics.csv
+  checkpoint_directory: ../checkpoints/wavlm

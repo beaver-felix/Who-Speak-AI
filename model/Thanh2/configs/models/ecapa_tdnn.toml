@@ -1,0 +1,38 @@
+[model]
+name = "ecapa_tdnn"
+source_id = "speechbrain/spkrec-ecapa-voxceleb"
+revision = "0f99f2d0ebe89ac095bcc5903c4dd8f72b367286"
+embedding_dim = 192
+initialization = "pretrained_speaker_encoder"
+
+[model.audit]
+parameter_count = 20767552
+checkpoint_compatibility = "passed"
+
+[model.configuration_status]
+training_recipe = "initial_screening_candidate_pending_validation"
+
+[model.runtime]
+reflection_padding = "deterministic_slice_flip_concat_equivalent"
+
+[optimization]
+name = "adam"
+trainable_scope = "complete_encoder_and_new_head"
+encoder_learning_rate = 0.0001
+head_learning_rate = 0.0001
+weight_decay = 0.000002
+selection_status = "transfer_recipe_hypothesis_pending_validation"
+
+[training.batch]
+size = 24
+calibrated_largest_passing_size = 32
+selection_status = "multibatch_validated_ready_for_epoch_training"
+calibration_artifact = "results/model_audit/training_memory/ecapa_tdnn_vimd_classes_t4.json"
+validation_artifact = "results/model_audit/multibatch_training/ecapa_tdnn_tidyvoice_t4.json"
+
+[training.audio]
+segment_samples = 48000
+
+[evaluation]
+segment_samples = 48000
+utterance_batch_size = 4

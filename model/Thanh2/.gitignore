@@ -1,0 +1,75 @@
+# Python bytecode and interpreter caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing, coverage, linting, and type-checking caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging outputs
+build/
+dist/
+*.egg-info/
+
+# Jupyter-generated state
+.ipynb_checkpoints/
+
+# IDE and operating-system metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets and local environment settings
+.env
+.env.*
+!.env.example
+
+# Experiment tracking cache
+wandb/
+
+# Generated runtime directories
+/artifacts/
+/outputs/
+/checkpoints/
+/cache/
+/data/
+
+# Downloaded archives and dataset formats
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.parquet
+*.arrow
+
+# Raw audio must not be committed.
+# Small test fixtures may be explicitly allowed under tests/fixtures.
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.m4a
+!tests/fixtures/**/*.wav
+!tests/fixtures/**/*.flac
+
+# Model weights and exported binaries
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+*.torchscript
