@@ -31,15 +31,19 @@ class OpenAIResponsesProvider(LLMProvider):
         transcript: str,
         *,
         allowed_tools: set[str],
+        auth_context: AuthDecision | None,
     ) -> dict[str, object]:
         text = transcript.strip()
         if not text:
             raise ValueError("A non-empty local ASR transcript is required.")
+        auth_state = auth_context.state.value if auth_context is not None else "unknown"
+        private_access = bool(auth_context and auth_context.may_use_private_tools)
         instructions = (
-            "You are a helpful voice assistant. Keep answers concise and natural when spoken. "
-            "You will just answer about asking mainly on personalization, like asking the calendar, "
-            "If topic is different, you should answer short, and remind the user about just asking the calendar if needed, "
-            "Follow the capability policy. "
+            "You are a helpful Vietnamese-first voice assistant. Keep answers concise and natural when spoken. "
+            "Follow the capability policy and the trusted VoiceAuth state; never claim that voice authentication, "
+            "Calendar access, or a Calendar action succeeded unless the application supplied that result. "
+            f"Trusted VoiceAuth state for this request: {auth_state}. Private Calendar access: {'granted' if private_access else 'not granted'}. "
+            "When private Calendar access is not granted, explain briefly in Vietnamese that voice authentication is required before reading personal calendar data. "
             "Use trusted current-time context and Calendar tool results supplied by the application; "
             "never invent dates, times, events, or successful Calendar access. "
             f"Capabilities available for this request: {', '.join(sorted(allowed_tools)) or 'none'}."
@@ -61,7 +65,9 @@ class OpenAIResponsesProvider(LLMProvider):
         # The capability list is selected by SupervisorPolicy before this call.
         # Do not include identity, score, embedding, HE context, or raw audio.
         response = await self._client_or_create().responses.create(
-            **self._request_arguments(transcript, allowed_tools=allowed_tools),
+            **self._request_arguments(
+                transcript, allowed_tools=allowed_tools, auth_context=auth_context
+            ),
         )
         output = getattr(response, "output_text", "")
         if not isinstance(output, str) or not output.strip():
@@ -77,7 +83,9 @@ class OpenAIResponsesProvider(LLMProvider):
     ) -> AsyncIterator[str]:
         """Yield only visible text deltas from the Responses API stream."""
         stream = await self._client_or_create().responses.create(
-            **self._request_arguments(transcript, allowed_tools=allowed_tools),
+            **self._request_arguments(
+                transcript, allowed_tools=allowed_tools, auth_context=auth_context
+            ),
             stream=True,
         )
         yielded = False

@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from app.assistant.agents.conversation import ConversationSupervisor
 from app.assistant.auth_session import AuthSession
-from app.assistant.contracts import AuthState
+from app.assistant.contracts import AuthDecision, AuthState
 from app.assistant.tools.calendar import CalendarResult
 from app.assistant_gateway.store import CalendarEvent
 from voiceauth.matching import VerificationResult
@@ -43,7 +43,7 @@ class FakeCalendar:
         return CalendarResult("mock", True, user_id, (event,))
 
 
-def test_guest_calendar_request_never_calls_the_calendar_provider() -> None:
+def test_guest_calendar_request_requires_voice_auth_without_calling_llm_or_calendar() -> None:
     llm, calendar = FakeLLM(), FakeCalendar()
     supervisor = ConversationSupervisor(llm=llm, calendar=calendar, account_id="account-guest")
 
@@ -51,10 +51,31 @@ def test_guest_calendar_request_never_calls_the_calendar_provider() -> None:
         supervisor.respond("Lịch hôm nay của tôi?", auth=AuthSession(ttl=timedelta(minutes=5)).current())
     )
 
-    assert response == "safe response"
+    assert response == (
+        "Bạn hãy xác thực voice trước để mình có thể xem lịch cá nhân. "
+        "Sau khi xác thực xong, hãy hỏi lại mình."
+    )
     assert tool_result is None
     assert calendar.calls == 0
-    assert llm.allowed_tools == {"general_qa"}
+    assert llm.allowed_tools is None
+    assert llm.prompts == []
+
+
+def test_expired_voice_session_requires_reauthentication_before_calendar_access() -> None:
+    llm, calendar = FakeLLM(), FakeCalendar()
+    supervisor = ConversationSupervisor(llm=llm, calendar=calendar, account_id="account-expired")
+
+    response, tool_result = asyncio.run(
+        supervisor.respond("Xem lịch cá nhân của tôi", auth=AuthDecision(AuthState.SESSION_EXPIRED))
+    )
+
+    assert response == (
+        "Phiên xác thực voice đã hết hạn. Bạn hãy xác thực voice lại trước "
+        "để mình có thể xem lịch cá nhân."
+    )
+    assert tool_result is None
+    assert calendar.calls == 0
+    assert llm.prompts == []
 
 
 def test_authenticated_calendar_request_is_explicitly_marked_as_mock() -> None:
