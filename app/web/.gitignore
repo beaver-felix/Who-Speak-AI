@@ -1,0 +1,21 @@
+# Dependencies installed by npm/pnpm/yarn.
+node_modules/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+
+# Frontend build and tool caches.
+dist/
+.next/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Local configuration and runtime logs.
+.env
+.env.*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

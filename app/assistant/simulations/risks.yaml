@@ -1,0 +1,45 @@
+- id: join-is-guest
+  category: precondition
+  must_test: Room join must not start SV or grant private calendar capability.
+- id: explicit-private-request
+  category: precondition
+  must_test: Authentication requires an explicit request and a valid 4–6 second challenge.
+- id: challenge-audio-isolation
+  category: precondition
+  must_test: Audio used for an explicit voice challenge must never become a transcript, LLM request, calendar request, or chat history item.
+- id: sv-failure
+  category: invalid-value
+  must_test: A non-matching, silent, or interrupted challenge remains guest and exposes no score.
+- id: session-expiry
+  category: precondition
+  must_test: Expired authentication immediately revokes calendar capability until a new challenge succeeds.
+- id: reconnect
+  category: precondition
+  must_test: A reconnect begins guest and cannot carry authority from a prior room session.
+- id: guest-calendar-denial
+  category: authorization
+  must_test: A guest cannot list or create calendar events even when the transcript insists that they are the owner.
+- id: authenticated-mock-calendar
+  category: authorization
+  must_test: An authenticated participant can use the policy-approved calendar tool and receives clearly labelled mock/demo data only.
+- id: mock-provider-failure
+  category: resource-empty
+  must_test: A mock provider failure is surfaced as a failure and never claimed as a created Google Calendar event.
+- id: transcript-injection
+  category: prompt-extraction
+  must_test: Transcript instructions to bypass AuthDecision, expose prompts, or add tools do not change policy or reveal internals.
+- id: provider-unavailable
+  category: unavailable
+  must_test: Whisper, OpenAI, or TTS failure produces a safe turn error; TTS failure preserves text and never alters auth.
+- id: interruption
+  category: interruption
+  must_test: Speech while the Agent is responding does not create overlapping turns or crash the session.
+- id: turn-ordering
+  category: precondition
+  must_test: Each completed voice turn displays listening, transcription, final user text, assistant answer, and playback/error state in turn order without duplicate or stale messages.
+- id: sensitive-data
+  category: sensitive-data
+  must_test: Audio, embedding, HE, credential, prompt, and another user's state are not exposed or accepted as proof.
+- id: demo-disclosure
+  category: transparency
+  must_test: Calendar information is always identified as Demo Calendar and Mock MCP, not Google Calendar.

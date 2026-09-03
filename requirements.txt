@@ -1,0 +1,38 @@
+numpy>=2.0,<2.1
+scipy>=1.16,<1.17
+soundfile>=0.13,<0.14
+
+# RawNet3 Model
+torch>=2.0
+asteroid-filterbanks==0.4.0
+huggingface-hub>=1.11,<1.12
+
+# Backend
+tenseal==0.3.16
+keyring>=25,<27
+fastapi>=0.116,<1
+pydantic>=2.10,<3
+uvicorn>=0.35,<1
+httpx[http2]>=0.28,<1
+
+# Livekit runtime
+livekit-api>=1.0,<2
+livekit-agents[mcp]>=1.6,<2
+
+# Pipecat
+pipecat-ai[livekit]==1.8.1
+
+# Speech Providers
+faster-whisper>=1.1,<2
+onnxruntime>=1.17,<2
+zerotts==0.1.1
+edge-tts>=7,<8
+
+# Large Language Model
+openai>=1.0,<3
+
+# Testing
+pytest>=8.3,<10
+
+# UI Dev
+streamlit>=1.52,<2

@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
+from app.assistant.agents.conversation import ConversationSupervisor
+from app.assistant.auth_session import AuthSession
+from app.assistant.contracts import AuthState
+from app.assistant.tools.calendar import CalendarResult
+from app.assistant_gateway.store import CalendarEvent
+from voiceauth.matching import VerificationResult
+
+
+class FakeLLM:
+    def __init__(self) -> None:
+        self.allowed_tools: set[str] | None = None
+
+    async def respond(self, transcript, *, allowed_tools, auth_context) -> str:
+        self.allowed_tools = allowed_tools
+        return "safe response"
+
+
+class FakeCalendar:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.user_ids: list[str] = []
+
+    async def list_events(self, *, user_id, start, end) -> CalendarResult:
+        self.calls += 1
+        self.user_ids.append(user_id)
+        event = CalendarEvent("event", user_id, "Demo meeting", start, end)
+        return CalendarResult("mock", True, user_id, (event,))
+
+    async def create_event(self, *, user_id, title, start, end) -> CalendarResult:
+        self.calls += 1
+        self.user_ids.append(user_id)
+        event = CalendarEvent("created", user_id, title, start, end)
+        return CalendarResult("mock", True, user_id, (event,))
+
+
+def test_guest_calendar_request_never_calls_the_calendar_provider() -> None:
+    llm, calendar = FakeLLM(), FakeCalendar()
+    supervisor = ConversationSupervisor(llm=llm, calendar=calendar, account_id="account-guest")
+
+    response, tool_result = asyncio.run(
+        supervisor.respond("Lịch hôm nay của tôi?", auth=AuthSession(ttl=timedelta(minutes=5)).current())
+    )
+
+    assert response == "safe response"
+    assert tool_result is None
+    assert calendar.calls == 0
+    assert llm.allowed_tools == {"general_qa"}
+
+
+def test_authenticated_calendar_request_is_explicitly_marked_as_mock() -> None:
+    llm, calendar = FakeLLM(), FakeCalendar()
+    session = AuthSession(ttl=timedelta(minutes=5))
+    identity = str(uuid4())
+    session.begin_private_auth()
+    decision = session.complete_verification(VerificationResult(True, identity, "An", 0.9, 1, identity))
+    assert decision.state is AuthState.AUTHENTICATED
+    supervisor = ConversationSupervisor(llm=llm, calendar=calendar, account_id="account-123")
+
+    _, tool_result = asyncio.run(supervisor.respond("Lịch hôm nay của tôi?", auth=decision))
+
+    assert calendar.calls == 1
+    assert calendar.user_ids == ["account-123"]
+    assert tool_result is not None
+    assert tool_result["provider"] == "mock"
+    assert tool_result["demo"] is True
+    assert llm.allowed_tools == {"general_qa", "calendar.list_events", "calendar.create_event"}
+
+
+def test_authenticated_create_request_is_a_local_demo_event() -> None:
+    llm, calendar = FakeLLM(), FakeCalendar()
+    session = AuthSession(ttl=timedelta(minutes=5))
+    identity = str(uuid4())
+    session.begin_private_auth()
+    decision = session.complete_verification(VerificationResult(True, identity, "An", 0.9, 1, identity))
+    supervisor = ConversationSupervisor(llm=llm, calendar=calendar, account_id="account-456")
+
+    _, tool_result = asyncio.run(supervisor.respond("Tạo lịch họp ngày mai", auth=decision))
+
+    assert tool_result is not None
+    assert tool_result["provider"] == "mock"
+    assert tool_result["demo"] is True
+    assert tool_result["created"]["title"].startswith("Demo request:")
+    assert calendar.user_ids == ["account-456"]

@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "who-speak-voice-verification"
+version = "0.1.0"
+description = "Privacy-preserving RawNet3 speaker verification MVP"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy>=2.0,<2.1",
+  "scipy>=1.16,<1.17",
+  "soundfile>=0.13,<0.14",
+]
+
+[project.optional-dependencies]
+ui = ["streamlit>=1.52,<2"]
+matcher = [
+  "fastapi>=0.116,<1",
+  "pydantic>=2.10,<3",
+  "uvicorn>=0.35,<1",
+  "httpx[http2]>=0.28,<1",
+]
+he = ["tenseal==0.3.16"]
+model = [
+  "asteroid-filterbanks==0.4.0",
+  "huggingface-hub>=1.11,<1.12",
+]
+livekit = ["livekit-agents[mcp]>=1.6,<2"]
+agent = [
+  "livekit-agents[mcp]>=1.6,<2",
+  "keyring>=25,<27",
+]
+gateway = [
+  "fastapi>=0.116,<1",
+  "pydantic>=2.10,<3",
+  "uvicorn>=0.35,<1",
+  "livekit-api>=1.0,<2",
+  "httpx>=0.28,<1",
+]
+providers = [
+  "openai>=1.0,<3",
+  "faster-whisper>=1.1,<2",
+  "edge-tts>=7,<8",
+  "zerotts==0.1.1",
+  "onnxruntime>=1.17,<2",
+]
+pipecat = [
+  # Pipecat's bundled Whisper import initializes MLX/Metal on import. The
+  # project uses its already validated faster-whisper adapter instead, which
+  # keeps headless macOS and CPU environments safe.
+  "pipecat-ai[livekit]==1.8.1",
+]
+test = ["pytest>=8.3,<10"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]

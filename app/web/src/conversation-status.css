@@ -1,0 +1,15 @@
+.message.provisional {
+  border-style: dashed;
+  opacity: 0.86;
+}
+
+.audio-state.completed {
+  color: #003a2e;
+  background: var(--accent);
+}
+
+.audio-state.interrupted,
+.state-icon.interrupted {
+  color: #553900;
+  background: var(--warning);
+}
