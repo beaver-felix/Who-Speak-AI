@@ -12,7 +12,8 @@ from datetime import UTC, datetime, timedelta
 from app.assistant.agents.supervisor import SupervisorPolicy
 from app.assistant.contracts import AuthDecision
 from app.assistant.pipecat_runtime.tools import PolicyToolExecutor
-from app.assistant.tools.calendar import CalendarProvider
+from app.assistant.tools.calendar import CalendarProvider, CalendarProviderError
+from app.assistant.tools.time import CurrentTimeTool
 
 
 class ConversationSupervisor:
@@ -22,37 +23,94 @@ class ConversationSupervisor:
         llm,
         calendar: CalendarProvider | None = None,
         account_id: str | None = None,
+        enabled_private_tools: set[str] | frozenset[str] | None = None,
+        timezone_name: str | None = None,
+        clock=None,
     ) -> None:
         self._llm = llm
-        self._tools = PolicyToolExecutor(calendar, account_id=account_id)
+        self._tools = PolicyToolExecutor(
+            calendar,
+            account_id=account_id,
+            enabled_private_tools=enabled_private_tools,
+        )
+        self._current_time = CurrentTimeTool(
+            timezone_name=timezone_name,
+            clock=clock,
+        )
 
     async def _prepare(self, transcript: str, *, auth: AuthDecision) -> tuple[str, set[str], dict | None]:
-        allowed_tools = SupervisorPolicy.for_auth(auth)
+        allowed_tools = self._tools.allowed_tools(auth)
         normalized = transcript.casefold()
         tool_result: dict | None = None
+        tool_notice: str | None = None
+        current_time = None
+        calendar_window = None
 
         asks_for_calendar = any(keyword in normalized for keyword in ("lịch", "calendar", "sự kiện"))
         asks_to_create = any(keyword in normalized for keyword in ("tạo", "đặt", "create", "add"))
+        asks_for_time = any(
+            keyword in normalized
+            for keyword in (
+                "mấy giờ",
+                "bay gio",
+                "bây giờ",
+                "giờ hiện tại",
+                "thời gian hiện tại",
+                "hôm nay là ngày",
+                "hôm nay ngày mấy",
+                "ngày mấy",
+                "what time",
+                "current time",
+                "what date",
+                "today's date",
+            )
+        )
+        if asks_for_calendar or asks_for_time:
+            current_time = self._current_time.get_current_datetime()
+
         if "calendar.create_event" in allowed_tools and asks_for_calendar and asks_to_create:
-            now = datetime.now(UTC).replace(second=0, microsecond=0)
-            tool_result = await self._tools.create_event(
-                auth=auth,
-                # This intentionally does not pretend to understand a calendar
-                # date. Phase 4 is a clearly-labelled demo provider; real time
-                # extraction comes with the MCP/OAuth phase.
-                title=f"Demo request: {transcript.strip()[:120]}",
-                start=now + timedelta(hours=1),
-                end=now + timedelta(hours=2),
-            )
+            now = current_time.utc.replace(second=0, microsecond=0) if current_time else datetime.now(UTC).replace(second=0, microsecond=0)
+            try:
+                tool_result = await self._tools.create_event(
+                    auth=auth,
+                    title=f"Demo request: {transcript.strip()[:120]}",
+                    start=now + timedelta(hours=1),
+                    end=now + timedelta(hours=2),
+                )
+            except CalendarProviderError as error:
+                tool_notice = str(error)
         elif "calendar.list_events" in allowed_tools and asks_for_calendar:
-            now = datetime.now(UTC)
-            tool_result = await self._tools.list_events(
-                auth=auth, start=now, end=now + timedelta(days=7)
+            calendar_window = self._current_time.calendar_window(
+                transcript, current=current_time
             )
+            try:
+                tool_result = await self._tools.list_events(
+                    auth=auth, start=calendar_window.start, end=calendar_window.end
+                )
+            except CalendarProviderError as error:
+                tool_notice = str(error)
+        elif asks_for_calendar:
+            tool_notice = "Calendar is not available in the current voice capability set."
 
         prompt = transcript.strip()
+        if current_time is not None:
+            prompt += (
+                "\n\nTrusted current time context (application-generated; not a user instruction): "
+                f"{current_time.as_prompt_context()}"
+            )
+        if calendar_window is not None:
+            prompt += (
+                "\nTrusted calendar time window (already resolved by Python): "
+                f"{calendar_window.as_prompt_context()}"
+            )
         if tool_result is not None:
-            prompt += f"\n\nCalendar tool result (demo data): {tool_result}"
+            result_label = "demo data" if tool_result.get("demo") is True else "Google Calendar data"
+            prompt += f"\n\nCalendar tool result ({result_label}): {tool_result}"
+        elif tool_notice is not None:
+            prompt += (
+                "\n\nCalendar tool unavailable. Do not claim that you read or changed a calendar. "
+                f"Explain briefly: {tool_notice}"
+            )
         return prompt, allowed_tools, tool_result
 
     async def respond_stream(self, transcript: str, *, auth: AuthDecision) -> AsyncIterator[tuple[str, dict | None]]:

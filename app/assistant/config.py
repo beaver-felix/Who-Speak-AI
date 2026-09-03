@@ -27,6 +27,8 @@ class LocalAgentSettings:
     conversation_enabled: bool
     whisper_model: str
     whisper_device: str
+    whisper_compute_type: str
+    whisper_cpu_threads: int
     tts_provider: str
     tts_fallback_provider: str | None
     zerotts_model: str
@@ -41,6 +43,8 @@ class LocalAgentSettings:
     edge_tts_voice: str
     tts_timeout_seconds: float
     participant_join_timeout_seconds: float
+    pipeline_setup_timeout_seconds: float
+    pipeline_start_timeout_seconds: float
     vad_min_speech_seconds: float
     vad_silence_seconds: float
     vad_maximum_seconds: float
@@ -70,6 +74,12 @@ class LocalAgentSettings:
         vad_silence_seconds = float(os.getenv("VOICE_VAD_SILENCE_SECONDS", "0.45"))
         vad_maximum_seconds = float(os.getenv("VOICE_VAD_MAXIMUM_SECONDS", "15"))
         smart_turn_model_path = os.getenv("VOICE_SMART_TURN_MODEL_PATH", "").strip() or None
+        whisper_device = os.getenv("VOICE_WHISPER_DEVICE", "cpu").strip() or "cpu"
+        whisper_compute_type = os.getenv(
+            "VOICE_WHISPER_COMPUTE_TYPE",
+            "int8" if whisper_device == "cpu" else "default",
+        ).strip() or "default"
+        whisper_cpu_threads = int(os.getenv("VOICE_WHISPER_CPU_THREADS", "4"))
         smart_turn_cpu_count = int(os.getenv("VOICE_SMART_TURN_CPU_COUNT", "1"))
         smart_turn_pre_speech_ms = float(os.getenv("VOICE_SMART_TURN_PRE_SPEECH_MS", "500"))
         smart_turn_max_wait_seconds = float(os.getenv("VOICE_SMART_TURN_MAX_WAIT_SECONDS", "2"))
@@ -98,6 +108,12 @@ class LocalAgentSettings:
         participant_join_timeout_seconds = float(
             os.getenv("VOICE_AGENT_JOIN_TIMEOUT_SECONDS", "45")
         )
+        pipeline_setup_timeout_seconds = float(
+            os.getenv("VOICE_AGENT_PIPELINE_SETUP_TIMEOUT_SECONDS", "120")
+        )
+        pipeline_start_timeout_seconds = float(
+            os.getenv("VOICE_AGENT_PIPELINE_START_TIMEOUT_SECONDS", "120")
+        )
         if vad_min_speech_seconds <= 0 or vad_silence_seconds <= 0 or vad_maximum_seconds <= vad_min_speech_seconds:
             raise ValueError("VOICE_VAD timing values must be positive and maximum must exceed minimum speech.")
         if not 4.0 <= auth_challenge_seconds <= 6.0:
@@ -124,8 +140,16 @@ class LocalAgentSettings:
             raise ValueError("ZeroTTS runtime configuration values are invalid.")
         if smart_turn_cpu_count <= 0 or smart_turn_pre_speech_ms < 0 or smart_turn_max_wait_seconds <= 0:
             raise ValueError("Smart Turn configuration values are invalid.")
+        if whisper_cpu_threads <= 0:
+            raise ValueError("VOICE_WHISPER_CPU_THREADS must be positive.")
+        if not whisper_compute_type:
+            raise ValueError("VOICE_WHISPER_COMPUTE_TYPE must not be empty.")
         if participant_join_timeout_seconds <= 0:
             raise ValueError("VOICE_AGENT_JOIN_TIMEOUT_SECONDS must be positive.")
+        if pipeline_setup_timeout_seconds <= 0:
+            raise ValueError("VOICE_AGENT_PIPELINE_SETUP_TIMEOUT_SECONDS must be positive.")
+        if pipeline_start_timeout_seconds <= 0:
+            raise ValueError("VOICE_AGENT_PIPELINE_START_TIMEOUT_SECONDS must be positive.")
         api_key = os.getenv("LIVEKIT_API_KEY", "").strip()
         api_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
         dev_mode = _as_bool("LIVEKIT_DEV_MODE")
@@ -146,7 +170,9 @@ class LocalAgentSettings:
             keychain_account=os.getenv("VOICE_HE_KEYCHAIN_ACCOUNT", "local-owner"),
             conversation_enabled=_as_bool("VOICE_AGENT_CONVERSATION_ENABLED"),
             whisper_model=os.getenv("VOICE_WHISPER_MODEL", "base").strip() or "base",
-            whisper_device=os.getenv("VOICE_WHISPER_DEVICE", "cpu").strip() or "cpu",
+            whisper_device=whisper_device,
+            whisper_compute_type=whisper_compute_type,
+            whisper_cpu_threads=whisper_cpu_threads,
             tts_provider=tts_provider,
             tts_fallback_provider=tts_fallback_provider,
             zerotts_model=zerotts_model,
@@ -161,6 +187,8 @@ class LocalAgentSettings:
             edge_tts_voice=os.getenv("VOICE_EDGE_TTS_VOICE", "vi-VN-HoaiMyNeural").strip() or "vi-VN-HoaiMyNeural",
             tts_timeout_seconds=tts_timeout_seconds,
             participant_join_timeout_seconds=participant_join_timeout_seconds,
+            pipeline_setup_timeout_seconds=pipeline_setup_timeout_seconds,
+            pipeline_start_timeout_seconds=pipeline_start_timeout_seconds,
             vad_min_speech_seconds=vad_min_speech_seconds,
             vad_silence_seconds=vad_silence_seconds,
             vad_maximum_seconds=vad_maximum_seconds,

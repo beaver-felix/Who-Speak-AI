@@ -117,6 +117,12 @@ class ZeroTTSLocalProvider:
                 item = output_queue.get_nowait() if not output_queue.empty() else None
                 if item is None:
                     if worker.done() and output_queue.empty():
+                        # The producer can finish between its last audio put
+                        # and its sentinel put. Do not lose a short utterance
+                        # that is still waiting in the startup buffer.
+                        for pending_item in pending:
+                            yield pending_item
+                        pending.clear()
                         break
                     await asyncio.sleep(0.005)
                     continue

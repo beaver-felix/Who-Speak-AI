@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Room, RoomEvent, Track } from 'livekit-client'
 
 import { api } from './api'
-import { AUTH_COMMAND_TOPIC, AUTH_STATUS_TOPIC, CANCEL_PRIVATE_MODE, parseAuthStatus, REQUEST_PRIVATE_MODE, type AuthStatus } from './auth-status'
+import { AUTH_COMMAND_TOPIC, AUTH_STATUS_TOPIC, parseAuthStatus, REQUEST_PRIVATE_MODE, type AuthStatus } from './auth-status'
 import { AGENT_COMMAND_TOPIC, AGENT_EVENT_TOPIC, initialConversationState, parseVoiceAgentEvent, reduceConversation, type ConversationState, type SessionStatus } from './conversation'
+import { decideRoomLifecycle, statusAfterTransientReconnect } from './room-lifecycle'
 import type { AudioPlaybackState, ConnectionState } from './VoiceStage'
 
 const initialAuth: AuthStatus = {
@@ -29,6 +30,14 @@ export function useLiveKitVoiceSession() {
   const joiningRef = useRef(false)
   const rotatingRef = useRef(false)
   const leavingRef = useRef(false)
+  const roomGenerationRef = useRef(0)
+  const stableSessionStatusRef = useRef<SessionStatus>('idle')
+  const transientReconnectRef = useRef(false)
+  const startupFailedRef = useRef(false)
+  const intentionalDisconnectRef = useRef<Room | null>(null)
+  const replacementPromiseRef = useRef<Promise<void> | null>(null)
+  const agentRecoveryTimerRef = useRef<number | null>(null)
+  const reconnectNoticeTimerRef = useRef<number | null>(null)
   const authSessionIdRef = useRef<string | null>(null)
   const agentIdentityRef = useRef<string | null>(null)
   const authSequenceRef = useRef(0)
@@ -51,11 +60,29 @@ export function useLiveKitVoiceSession() {
     setAuthCommandPending(false)
   }
 
+  function clearAgentRecoveryTimer() {
+    if (agentRecoveryTimerRef.current !== null) {
+      window.clearTimeout(agentRecoveryTimerRef.current)
+      agentRecoveryTimerRef.current = null
+    }
+  }
+
+  function clearReconnectNoticeTimer() {
+    if (reconnectNoticeTimerRef.current !== null) {
+      window.clearTimeout(reconnectNoticeTimerRef.current)
+      reconnectNoticeTimerRef.current = null
+    }
+  }
+
   useEffect(() => () => {
+    roomGenerationRef.current += 1
     rotatingRef.current = false
     leavingRef.current = true
+    clearAgentRecoveryTimer()
+    clearReconnectNoticeTimer()
     clearAuthCommandWait()
     const room = roomRef.current
+    intentionalDisconnectRef.current = room
     roomRef.current = null
     void room?.disconnect()
     for (const elements of audioElementsRef.current.values()) elements.forEach((element) => element.remove())
@@ -68,6 +95,11 @@ export function useLiveKitVoiceSession() {
     dispatch((current) => reduceConversation(current, event))
   }
 
+  function setSessionStatus(status: SessionStatus, message?: string) {
+    if (status === 'starting' || status === 'ready') stableSessionStatusRef.current = status
+    conversationDispatch({ type: 'set_session_status', status, message })
+  }
+
   function cleanAudioElements() {
     for (const elements of audioElementsRef.current.values()) {
       elements.forEach((element) => element.remove())
@@ -77,15 +109,66 @@ export function useLiveKitVoiceSession() {
   }
 
   function resetVisibleSession(status: SessionStatus = 'idle', message?: string) {
+    clearReconnectNoticeTimer()
+    transientReconnectRef.current = false
+    startupFailedRef.current = false
+    stableSessionStatusRef.current = status === 'starting' || status === 'ready' ? status : 'idle'
     setAuth(initialAuth)
     conversationDispatch({ type: 'reset' })
-    conversationDispatch({ type: 'set_session_status', status, message })
+    setSessionStatus(status, message)
+  }
+
+  async function replaceCurrentRoom(room: Room, message: string) {
+    if (leavingRef.current || rotatingRef.current || roomRef.current !== room) return
+    if (replacementPromiseRef.current) return replacementPromiseRef.current
+
+    let replacement: Promise<void>
+    replacement = (async () => {
+      rotatingRef.current = true
+      startupFailedRef.current = false
+      clearAgentRecoveryTimer()
+      clearReconnectNoticeTimer()
+      setConnection('reconnecting')
+      resetVisibleSession('reconnecting', message)
+      intentionalDisconnectRef.current = room
+      roomRef.current = null
+      clearAuthCommandWait()
+      cleanAudioElements()
+      setMicrophoneEnabled(false)
+      setMicrophoneTrack(null)
+
+      try {
+        await room.disconnect()
+      } catch {
+        // The old room is no longer reusable. Continue with a fresh token.
+      } finally {
+        if (intentionalDisconnectRef.current === room) intentionalDisconnectRef.current = null
+        rotatingRef.current = false
+        if (!leavingRef.current) await join()
+        else {
+          setConnection('idle')
+          resetVisibleSession()
+        }
+      }
+    })()
+    replacementPromiseRef.current = replacement
+    try {
+      await replacement
+    } finally {
+      if (intentionalDisconnectRef.current === room) intentionalDisconnectRef.current = null
+      if (replacementPromiseRef.current === replacement) replacementPromiseRef.current = null
+    }
   }
 
   async function join() {
-    if (joiningRef.current || roomRef.current) return
+    if (joiningRef.current || roomRef.current || rotatingRef.current) return
     joiningRef.current = true
     leavingRef.current = false
+    clearReconnectNoticeTimer()
+    transientReconnectRef.current = false
+    startupFailedRef.current = false
+    const roomGeneration = roomGenerationRef.current + 1
+    roomGenerationRef.current = roomGeneration
     authSessionIdRef.current = null
     agentIdentityRef.current = null
     authSequenceRef.current = 0
@@ -95,6 +178,16 @@ export function useLiveKitVoiceSession() {
 
     const room = new Room({ adaptiveStream: true, dynacast: true })
     let token: Awaited<ReturnType<typeof api.livekitToken>> | null = null
+    let connectedOnce = false
+
+    const isCurrentRoom = () => roomRef.current === room && roomGenerationRef.current === roomGeneration && !leavingRef.current
+
+    const restoreAfterReconnect = () => {
+      const status: SessionStatus = statusAfterTransientReconnect(stableSessionStatusRef.current)
+      setSessionStatus(status, status === 'ready'
+        ? 'Đã kết nối lại. Phiên voice hiện tại vẫn được giữ nguyên.'
+        : 'Đã kết nối lại. Voice engine tiếp tục khởi động…')
+    }
 
     const applyAuthStatus = (status: AuthStatus) => {
       if (status.sessionId && authSessionIdRef.current && status.sessionId !== authSessionIdRef.current) return
@@ -106,44 +199,54 @@ export function useLiveKitVoiceSession() {
     }
 
     const handleEvent = (payload: string, participantIdentity = '') => {
+      if (!isCurrentRoom()) return
       const event = parseVoiceAgentEvent(payload)
-      if (event) conversationDispatch(event)
+      if (event?.type === 'session_status' && event.status === 'failed') {
+        // A startup failure is terminal for this Agent participant. Keep the
+        // error visible and let the user explicitly retry instead of treating
+        // the participant exit as a transient reconnect.
+        startupFailedRef.current = true
+        transientReconnectRef.current = false
+        clearReconnectNoticeTimer()
+        setConnection('failed')
+      } else if (event?.type === 'session_status' && (event.status === 'connecting' || event.status === 'starting')) {
+        startupFailedRef.current = false
+      }
+      const suppressTransientStatus = transientReconnectRef.current
+        && event?.type === 'session_status'
+        && event.status !== 'failed'
+      if (event && !suppressTransientStatus) {
+        if (event.type === 'session_status' && (event.status === 'starting' || event.status === 'ready')) {
+          stableSessionStatusRef.current = event.status
+        }
+        conversationDispatch(event)
+      }
       const status = parseAuthStatus(payload, participantIdentity, token?.agent_identity)
       if (status) applyAuthStatus(status)
     }
 
-    const rotateWithFreshToken = async () => {
-      if (rotatingRef.current || roomRef.current !== room) return
-      rotatingRef.current = true
-      resetVisibleSession('reconnecting', 'Đang tạo phiên mới…')
-      try {
-        await room.disconnect()
-      } catch {
-        // The disconnected event still performs cleanup; a new token is safer
-        // than attempting to reuse a possibly stale authenticated room.
-      } finally {
-        rotatingRef.current = false
-        if (!roomRef.current) await join()
-      }
-    }
-
     room.registerTextStreamHandler(AUTH_STATUS_TOPIC, async (reader, participant) => {
-      if (!token) return
-      const status = parseAuthStatus(await reader.readAll(), participant.identity, token.agent_identity)
+      if (!token || !isCurrentRoom()) return
+      const payload = await reader.readAll()
+      if (!isCurrentRoom()) return
+      const status = parseAuthStatus(payload, participant.identity, token.agent_identity)
       if (status) applyAuthStatus(status)
     })
     room.registerTextStreamHandler(AGENT_EVENT_TOPIC, async (reader) => {
-      handleEvent(await reader.readAll())
+      if (!isCurrentRoom()) return
+      const payload = await reader.readAll()
+      if (!isCurrentRoom()) return
+      handleEvent(payload)
     })
     room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
-      if (!token || (topic && topic !== AGENT_EVENT_TOPIC && topic !== AUTH_STATUS_TOPIC) || token.runtime !== 'pipecat') return
+      if (!token || !isCurrentRoom() || (topic && topic !== AGENT_EVENT_TOPIC && topic !== AUTH_STATUS_TOPIC) || token.runtime !== 'pipecat') return
       const text = new TextDecoder().decode(payload)
       const senderIdentity = participant?.identity ?? ''
       if (senderIdentity && senderIdentity !== token.agent_identity) return
       handleEvent(text, senderIdentity)
     })
     room.on(RoomEvent.TrackSubscribed, (track) => {
-      if (track.kind !== Track.Kind.Audio) return
+      if (!isCurrentRoom() || track.kind !== Track.Kind.Audio) return
       const trackId = track.mediaStreamTrack.id
       if (!audioElementsRef.current.has(trackId)) {
         const element = track.attach()
@@ -151,77 +254,182 @@ export function useLiveKitVoiceSession() {
         element.setAttribute('aria-label', 'Voice assistant response')
         document.body.appendChild(element)
         audioElementsRef.current.set(trackId, [element])
+        // `attach()` creates the correct media element, but a browser can
+        // still require an explicit play attempt after an asynchronous room
+        // join. Keep the failure visible so a user can use the existing
+        // “Bật âm thanh Agent” recovery control instead of silently losing
+        // every remote TTS track.
+        void element.play().then(() => {
+          if (isCurrentRoom()) setAudioPlayback('allowed')
+        }).catch((error: unknown) => {
+          if (!isCurrentRoom()) return
+          console.warn('[voice-session] assistant audio playback blocked', {
+            track_id: trackId,
+            error: error instanceof Error ? error.name : 'unknown',
+          })
+          setAudioPlayback('blocked')
+        })
       }
       setAssistantTracks((current) => current.some((item) => item.id === trackId) ? current : [...current, track.mediaStreamTrack])
     })
     room.on(RoomEvent.TrackUnsubscribed, (track) => {
       if (track.kind !== Track.Kind.Audio) return
       track.detach().forEach((element) => element.remove())
+      if (!isCurrentRoom()) return
       audioElementsRef.current.delete(track.mediaStreamTrack.id)
       setAssistantTracks((current) => current.filter((item) => item.id !== track.mediaStreamTrack.id))
     })
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      if (!isCurrentRoom()) return
       setAudioPlayback(room.canPlaybackAudio ? 'allowed' : 'blocked')
     })
     room.on(RoomEvent.Reconnecting, () => {
+      const decision = decideRoomLifecycle({
+        event: 'reconnecting',
+        isCurrentRoom: isCurrentRoom(),
+        intentionalDisconnect: intentionalDisconnectRef.current === room,
+        leaving: leavingRef.current,
+        replacementInFlight: rotatingRef.current,
+      })
+      if (decision !== 'preserve') return
+      console.info('[voice-session] room lifecycle', {
+        event: 'room_reconnecting',
+        session_id: token?.session_id ?? null,
+        active_room_generation: roomGeneration,
+      })
+      transientReconnectRef.current = true
+      clearReconnectNoticeTimer()
       setConnection('reconnecting')
-      resetVisibleSession('reconnecting', 'Kết nối bị gián đoạn, đang xác thực lại…')
+      // Keep the last stable status during a short ICE/signalling recovery.
+      // Controls are disabled immediately through connection state, but the
+      // status card is delayed to avoid a distracting reconnect flash.
+      reconnectNoticeTimerRef.current = window.setTimeout(() => {
+        reconnectNoticeTimerRef.current = null
+        if (isCurrentRoom() && transientReconnectRef.current) {
+          setSessionStatus('reconnecting', 'Kết nối tạm thời bị gián đoạn. Đang khôi phục phiên hiện tại…')
+        }
+      }, 1000)
     })
     room.on(RoomEvent.Reconnected, () => {
+      const decision = decideRoomLifecycle({
+        event: 'reconnected',
+        isCurrentRoom: isCurrentRoom(),
+        intentionalDisconnect: intentionalDisconnectRef.current === room,
+        leaving: leavingRef.current,
+        replacementInFlight: rotatingRef.current,
+      })
+      if (decision !== 'restore') return
+      transientReconnectRef.current = false
+      clearReconnectNoticeTimer()
+      console.info('[voice-session] room lifecycle', {
+        event: 'room_reconnected',
+        session_id: token?.session_id ?? null,
+        active_room_generation: roomGeneration,
+      })
       setConnection('connected')
-      resetVisibleSession('reconnecting', 'Đang tạo phiên voice mới…')
-      void rotateWithFreshToken()
+      setError(null)
+      restoreAfterReconnect()
+    })
+    room.on(RoomEvent.ParticipantConnected, (participant) => {
+      if (!isCurrentRoom() || participant.identity !== token?.agent_identity || agentRecoveryTimerRef.current === null) return
+      clearAgentRecoveryTimer()
+      clearReconnectNoticeTimer()
+      setConnection('connected')
+      setError(null)
+      restoreAfterReconnect()
     })
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       // The browser can remain connected after the one-room Pipecat worker
       // disappears. Without this recovery path the UI keeps the last auth
       // progress forever while audio is sent to a room with no Agent.
-      if (participant.identity !== token?.agent_identity || leavingRef.current || rotatingRef.current || roomRef.current !== room) return
-      setError('Local Agent đã ngắt kết nối, đang tạo phiên mới…')
-      setConnection('reconnecting')
-      resetVisibleSession('reconnecting', 'Agent đã ngắt kết nối, đang tạo phiên mới…')
-      void rotateWithFreshToken()
-    })
-    room.on(RoomEvent.Disconnected, () => {
-      // A delayed event from a room replaced during retry/reconnect must not
-      // reset the fresh room back to idle.
-      if (roomRef.current !== room && !rotatingRef.current) return
-      if (roomRef.current === room) roomRef.current = null
-      if (agentIdentityRef.current === token?.agent_identity) agentIdentityRef.current = null
-      clearAuthCommandWait()
-      cleanAudioElements()
-      setMicrophoneEnabled(false)
-      setMicrophoneTrack(null)
-      if (rotatingRef.current) {
-        setConnection('connecting')
-        conversationDispatch({ type: 'set_session_status', status: 'starting', message: 'Đang kết nối phiên mới…' })
-      } else {
-        setConnection('idle')
-        resetVisibleSession()
+      if (!isCurrentRoom() || participant.identity !== token?.agent_identity || leavingRef.current || rotatingRef.current) return
+      if (startupFailedRef.current) {
+        clearAgentRecoveryTimer()
+        clearReconnectNoticeTimer()
+        // The transport may still be connected, but there is no Agent left
+        // to process audio. Do not create a new room automatically after a
+        // startup failure; the retry card is the explicit recovery action.
+        setConnection('failed')
+        return
       }
+      console.info('[voice-session] room lifecycle', {
+        event: 'agent_disconnected',
+        session_id: token?.session_id ?? null,
+        active_room_generation: roomGeneration,
+      })
+      setConnection('reconnecting')
+      clearReconnectNoticeTimer()
+      clearAgentRecoveryTimer()
+      agentRecoveryTimerRef.current = window.setTimeout(() => {
+        agentRecoveryTimerRef.current = null
+        if (!isCurrentRoom()) return
+        setError('Local Agent đã ngắt kết nối, đang tạo phiên mới…')
+        setSessionStatus('reconnecting', 'Agent tạm thời bị gián đoạn. Đang kiểm tra kết nối…')
+        void replaceCurrentRoom(room, 'Phiên voice đã kết thúc. Đang tạo phiên mới, bạn sẽ cần xác thực lại.')
+      }, 1000)
     })
-    room.on(RoomEvent.MediaDevicesError, (reason) => setError(`Microphone error: ${reason.message}`))
+    room.on(RoomEvent.Disconnected, (reason) => {
+      // A failed initial connect is handled by join()'s catch block. Do not
+      // start a second replacement while that connect operation is unwinding.
+      if (joiningRef.current && !connectedOnce) return
+      const decision = decideRoomLifecycle({
+        event: 'disconnected',
+        isCurrentRoom: isCurrentRoom(),
+        intentionalDisconnect: intentionalDisconnectRef.current === room,
+        leaving: leavingRef.current,
+        replacementInFlight: rotatingRef.current,
+      })
+      if (decision === 'ignore') return
+      if (decision === 'preserve') {
+        clearReconnectNoticeTimer()
+        if (intentionalDisconnectRef.current === room) intentionalDisconnectRef.current = null
+        if (roomRef.current === room) roomRef.current = null
+        return
+      }
+      if (startupFailedRef.current) {
+        clearReconnectNoticeTimer()
+        setConnection('failed')
+        return
+      }
+      console.info('[voice-session] room disconnected', {
+        event: 'disconnected',
+        session_id: token?.session_id ?? null,
+        active_room_generation: roomGeneration,
+        reason: reason ? String(reason) : 'unknown',
+      })
+      clearReconnectNoticeTimer()
+      void replaceCurrentRoom(room, 'Phiên voice đã kết thúc. Đang tạo phiên mới, bạn sẽ cần xác thực lại.')
+    })
+    room.on(RoomEvent.MediaDevicesError, (reason) => {
+      if (isCurrentRoom()) setError(`Microphone error: ${reason.message}`)
+    })
 
     try {
       token = await api.livekitToken()
+      if (roomGenerationRef.current !== roomGeneration || leavingRef.current) return
       agentIdentityRef.current = token.agent_identity
+      roomRef.current = room
       room.prepareConnection(token.server_url, token.participant_token)
       await room.connect(token.server_url, token.participant_token)
-      roomRef.current = room
+      connectedOnce = true
+      if (!isCurrentRoom()) return
       setConnection('connected')
-      conversationDispatch({ type: 'set_session_status', status: token.runtime === 'pipecat' ? 'starting' : 'ready', message: token.runtime === 'pipecat' ? 'Local voice engine đang khởi động…' : 'Sẵn sàng lắng nghe.' })
+      setSessionStatus(token.runtime === 'pipecat' ? 'starting' : 'ready', token.runtime === 'pipecat' ? 'Local voice engine đang khởi động…' : 'Sẵn sàng lắng nghe.')
       try {
         await room.startAudio()
-        setAudioPlayback('allowed')
+        if (isCurrentRoom()) setAudioPlayback('allowed')
       } catch {
-        setAudioPlayback('blocked')
+        if (isCurrentRoom()) setAudioPlayback('blocked')
       }
       await room.localParticipant.setMicrophoneEnabled(true)
+      if (!isCurrentRoom()) return
       setMicrophoneEnabled(true)
       setMicrophoneTrack(room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null)
     } catch (caught) {
+      intentionalDisconnectRef.current = room
+      if (roomRef.current === room) roomRef.current = null
       await room.disconnect().catch(() => undefined)
-      roomRef.current = null
+      if (roomGenerationRef.current !== roomGeneration || leavingRef.current) return
       setConnection('idle')
       resetVisibleSession('failed')
       setError(toError(caught, 'Không thể tham gia local room.'))
@@ -233,28 +441,30 @@ export function useLiveKitVoiceSession() {
   async function leave() {
     leavingRef.current = true
     rotatingRef.current = false
+    clearAgentRecoveryTimer()
+    clearReconnectNoticeTimer()
     const room = roomRef.current
-    if (room) await room.disconnect()
-    else resetVisibleSession()
+    if (room) {
+      intentionalDisconnectRef.current = room
+      roomRef.current = null
+      await room.disconnect()
+      if (intentionalDisconnectRef.current === room) intentionalDisconnectRef.current = null
+    }
+    cleanAudioElements()
+    clearAuthCommandWait()
+    setMicrophoneEnabled(false)
+    setMicrophoneTrack(null)
+    setConnection('idle')
+    resetVisibleSession()
   }
 
   async function retrySession() {
-    if (joiningRef.current) return
+    if (joiningRef.current || replacementPromiseRef.current) return
     leavingRef.current = false
     const room = roomRef.current
     if (room) {
-      rotatingRef.current = true
-      try {
-        await room.disconnect()
-      } finally {
-        if (roomRef.current === room) {
-          roomRef.current = null
-          cleanAudioElements()
-          setMicrophoneEnabled(false)
-          setMicrophoneTrack(null)
-        }
-        rotatingRef.current = false
-      }
+      await replaceCurrentRoom(room, 'Đang tạo phiên voice mới…')
+      return
     }
     await join()
   }

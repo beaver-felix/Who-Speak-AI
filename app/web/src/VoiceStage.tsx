@@ -2,7 +2,7 @@ import type { AuthStatus } from './auth-status'
 import type { SessionStatus, VoiceAgentState } from './conversation'
 import type { AudioLevels } from './useAudioLevels'
 
-export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting'
+export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
 export type AudioPlaybackState = 'unknown' | 'allowed' | 'blocked'
 
 type VoiceStageProps = {
@@ -25,6 +25,7 @@ type VoiceStageProps = {
   onResumeConversation: () => void
   onContinueAsGuest: () => void
   onRetryVoice: () => void
+  onRetrySession: () => void
   onEnableAudio: () => void
   onOpenConversation: () => void
 }
@@ -110,6 +111,7 @@ export function VoiceStage({
   onResumeConversation,
   onContinueAsGuest,
   onRetryVoice,
+  onRetrySession,
   onEnableAudio,
   onOpenConversation,
 }: VoiceStageProps) {
@@ -131,7 +133,7 @@ export function VoiceStage({
     <div className="stage-heading">
       <div>
         <p className="eyebrow">Voice session</p>
-        <h2>{connected ? 'Nói với Agent' : 'Voice workspace'}</h2>
+        <h2>{connection === 'failed' ? 'Agent chưa sẵn sàng' : connected ? 'Nói với Agent' : 'Voice workspace'}</h2>
       </div>
       <span className={`auth-pill ${auth.state}`}><span className="status-dot" aria-hidden="true" />{authLabel(auth)}</span>
     </div>
@@ -147,7 +149,7 @@ export function VoiceStage({
     </div>
 
     <div className="voice-controls" aria-label="Voice controls">
-      {!connected ? <button className="primary" type="button" onClick={onJoin} disabled={connection === 'connecting' || connection === 'reconnecting'}>{connection === 'reconnecting' ? 'Đang kết nối lại…' : connection === 'connecting' ? 'Đang tham gia…' : 'Join local room'}</button> : <>
+      {connection === 'failed' ? <><button className="primary" type="button" onClick={onRetrySession}>Thử lại phiên</button><button className="danger" type="button" onClick={onLeave}>Leave room</button></> : !connected ? <button className="primary" type="button" onClick={onJoin} disabled={connection === 'connecting' || connection === 'reconnecting'}>{connection === 'reconnecting' ? 'Đang kết nối lại…' : connection === 'connecting' ? 'Đang tham gia…' : 'Join local room'}</button> : <>
         <button className="secondary" type="button" onClick={onToggleMicrophone} aria-pressed={microphoneEnabled}>{microphoneEnabled ? 'Tắt microphone' : 'Bật microphone'}</button>
         {challengeCapturing || challengeProcessing ? <button className="primary" type="button" onClick={onCancelChallenge} disabled={!sessionReady || authCommandPending}>{challengeProcessing ? 'Hủy kiểm tra' : 'Hủy voice challenge'}</button> : challengeWaiting ? auth.state === 'authenticated' ? <button className="primary" type="button" onClick={onResumeConversation} disabled={!sessionReady || !auth.canResume || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Bắt đầu nói với Agent'}</button> : <><button className="primary" type="button" onClick={onContinueAsGuest} disabled={!sessionReady || !auth.canResume || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Tiếp tục ở Guest'}</button><button className="secondary" type="button" onClick={onRetryVoice} disabled={!sessionReady || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Thử lại voice'}</button></> : <button className="primary" type="button" onClick={startChallenge} disabled={!sessionReady || auth.state === 'authenticated' || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : auth.state === 'authenticated' ? 'Đã mở private mode' : 'Xác thực voice'}</button>}
         <button className="danger" type="button" onClick={onLeave}>Leave room</button>
@@ -157,6 +159,7 @@ export function VoiceStage({
     </div>
 
     {connected && !sessionReady && <p className="readiness-hint" role="status">Agent chưa sẵn sàng nhận giọng nói. Vui lòng chờ trạng thái “Sẵn sàng lắng nghe”.</p>}
+    {connection === 'failed' && <p className="readiness-hint error" role="alert">Agent đã dừng trong lúc khởi động. Bấm “Thử lại phiên” để tạo phiên mới.</p>}
     {conversationBlocked && <div className={`challenge-progress ${challengeProcessing ? 'processing' : challengeWaiting ? 'waiting' : ''}`} role="status" aria-live="polite">
       {challengeCapturing && <div className="challenge-progress-bar" role="progressbar" aria-label="Tiến trình voice challenge" aria-valuemin={0} aria-valuemax={auth.targetMs} aria-valuenow={Math.min(auth.elapsedMs, auth.targetMs)}><span style={{ width: `${Math.min(100, auth.targetMs ? auth.elapsedMs / auth.targetMs * 100 : 0)}%` }} /></div>}
       <strong>{challengeLabel(auth)}</strong>

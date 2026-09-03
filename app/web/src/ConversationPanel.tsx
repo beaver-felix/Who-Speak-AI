@@ -19,7 +19,11 @@ function formatTime(timestamp: number): string {
 }
 
 function toolLabel(message: ChatMessage): string | null {
-  if (!message.tool?.demo) return null
+  if (!message.tool) return null
+  if (message.tool.provider === 'google_mcp') {
+    return message.tool.name === 'calendar.create_event' ? 'Google Calendar · create' : 'Google Calendar · MCP'
+  }
+  if (!message.tool.demo) return null
   return message.tool.name === 'calendar.create_event' ? 'Demo Calendar · create' : 'Demo Calendar · Mock MCP'
 }
 
@@ -70,7 +74,13 @@ function sessionStatusCopy(status: SessionStatus, message: string | null): {
     return { title: 'Sẵn sàng lắng nghe', detail: 'Bạn có thể bắt đầu nói.', tone: 'ready', retry: false }
   }
   if (status === 'reconnecting') {
-    return { title: 'Đang kết nối lại…', detail: 'Vui lòng chờ, phiên voice sẽ được xác thực lại.', tone: 'loading', retry: false }
+    const freshSession = message?.includes('tạo phiên mới') || message?.includes('xác thực lại')
+    return {
+      title: freshSession ? 'Phiên voice đã kết thúc' : 'Kết nối tạm thời bị gián đoạn',
+      detail: message ?? 'Đang khôi phục phiên voice hiện tại…',
+      tone: 'loading',
+      retry: false,
+    }
   }
   if (status === 'stopping') {
     return { title: 'Đang kết thúc phiên…', detail: 'Audio conversation đang được dọn dẹp.', tone: 'neutral', retry: false }
@@ -253,7 +263,7 @@ export function ConversationPanel({ conversation, auth, connection, mobileOpen, 
         <h2>Voice chat</h2>
       </div>
       <div className="conversation-header-actions">
-        <span className={`connection-chip ${connection}`}>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'reconnecting' ? 'Reconnecting' : 'Offline'}</span>
+        <span className={`connection-chip ${connection}`}>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'reconnecting' ? 'Reconnecting' : connection === 'failed' ? 'Agent unavailable' : 'Offline'}</span>
         <button className="icon-button mobile-only" type="button" onClick={onCloseMobile} aria-label="Đóng conversation">Close</button>
       </div>
     </header>

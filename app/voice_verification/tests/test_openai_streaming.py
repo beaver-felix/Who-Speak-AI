@@ -57,7 +57,7 @@ def test_openai_provider_yields_only_visible_text_deltas_and_keeps_store_disable
     assert client.responses.calls == [
         {
             "model": "test-model",
-            "instructions": "You are a helpful voice assistant. Keep answers concise and natural when spoken. Follow the capability policy. Capabilities available for this request: general_qa.",
+                "instructions": "You are a helpful voice assistant. Keep answers concise and natural when spoken. Follow the capability policy. Use trusted current-time context and Calendar tool results supplied by the application; never invent dates, times, events, or successful Calendar access. Capabilities available for this request: general_qa.",
             "input": "Xin chào",
             "store": False,
             "stream": True,

@@ -26,7 +26,7 @@ from app.assistant.providers.edge_tts_local import EdgeTTSProvider
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
 from app.assistant.providers.whisper_local import LocalWhisperProvider
 from app.assistant.streaming import SentenceBuffer
-from app.assistant.tools.calendar import MockCalendarProvider
+from app.assistant.tools.calendar import GatewayCalendarProvider, MockCalendarProvider
 from app.assistant.turn_controller import ConversationTurnController
 from app.assistant.voice_service import build_account_voice_auth_gate, build_persistent_voice_auth_gate
 from app.assistant_gateway.main import GatewaySettings
@@ -72,6 +72,15 @@ def _voice_target_from_dispatch(metadata: str, *, legacy_owner_id: str | None) -
     raise ValueError("Room has no enrolled voice target. Enroll voice before joining the assistant.")
 
 
+def _session_id_from_dispatch(metadata: str, *, fallback: str) -> str:
+    try:
+        payload = json.loads(metadata) if metadata else {}
+    except json.JSONDecodeError:
+        return fallback
+    value = payload.get("session_id") if isinstance(payload, dict) else None
+    return value if isinstance(value, str) and value.strip() else fallback
+
+
 async def accept_auth_gate_job(request) -> None:
     """Give the browser a stable identity for trusted status messages."""
     await request.accept(name="Voice Auth Gate", identity=AGENT_PARTICIPANT_IDENTITY)
@@ -90,6 +99,7 @@ async def auth_gate_entrypoint(ctx) -> None:
         ctx.job.metadata,
         legacy_owner_id=str(settings.owner_identity_id) if settings.owner_identity_id else None,
     )
+    dispatch_session_id = _session_id_from_dispatch(ctx.job.metadata, fallback=str(ctx.room.name))
     # Model load, HE private context access, and matcher registration occur
     # only in this local Agent process. They are absent from LiveKit data.
     if account_id:
@@ -116,16 +126,34 @@ async def auth_gate_entrypoint(ctx) -> None:
         # Provider construction is trusted/local. Whisper's model remains lazy
         # and audio is never passed to OpenAI; only the resulting transcript is.
         gateway_settings = GatewaySettings.from_environment()
-        if gateway_settings.mcp_provider != "mock" or not gateway_settings.mock_calendar_enabled:
-            raise RuntimeError("Only MCP_PROVIDER=mock is supported by the local Agent phase.")
-        store = GatewayStore(gateway_settings.database_path)
-        store.initialize()
         from app.assistant.config import OpenAISettings
 
+        if gateway_settings.mcp_provider == "mock":
+            if not gateway_settings.mock_calendar_enabled:
+                raise RuntimeError("Mock calendar is disabled.")
+            store = GatewayStore(gateway_settings.database_path)
+            store.initialize()
+            calendar = MockCalendarProvider(store)
+            enabled_private_tools = {"calendar.list_events", "calendar.create_event"}
+        else:
+            if not account_id:
+                raise RuntimeError("A gateway account context is required for Google Calendar MCP.")
+            if len(gateway_settings.pipecat_supervisor_secret) < 32:
+                raise RuntimeError("PIPECAT_SUPERVISOR_SECRET must be at least 32 characters for MCP tool calls.")
+            calendar = GatewayCalendarProvider(
+                gateway_url=gateway_settings.gateway_url,
+                session_id=dispatch_session_id,
+                room_name=str(ctx.room.name),
+                internal_secret=gateway_settings.pipecat_supervisor_secret,
+                account_id=account_id,
+                timeout_seconds=gateway_settings.google_mcp_timeout_seconds,
+            )
+            enabled_private_tools = {"calendar.list_events"}
         conversation = ConversationSupervisor(
             llm=OpenAIResponsesProvider(OpenAISettings.from_environment()),
-            calendar=MockCalendarProvider(store),
+            calendar=calendar,
             account_id=account_id,
+            enabled_private_tools=enabled_private_tools,
         )
         transcriber = LocalWhisperProvider(model_name=settings.whisper_model, device=settings.whisper_device)
         tts = EdgeTTSProvider(voice=settings.edge_tts_voice)

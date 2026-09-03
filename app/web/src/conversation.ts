@@ -2,7 +2,7 @@ export const AGENT_EVENT_TOPIC = 'voice-agent-event'
 export const AGENT_COMMAND_TOPIC = 'voice-agent-command'
 
 export type VoiceAgentState = 'listening' | 'transcribing' | 'thinking' | 'speaking' | 'completed' | 'interrupted' | 'error'
-export type ToolBadge = { name: 'calendar.list_events' | 'calendar.create_event'; provider: 'mock'; demo: true }
+export type ToolBadge = { name: 'calendar.list_events' | 'calendar.create_event'; provider: 'mock' | 'google_mcp'; demo: boolean }
 export type SessionStatus = 'idle' | 'connecting' | 'starting' | 'ready' | 'reconnecting' | 'stopping' | 'failed'
 export type VoiceAgentStage = 'auth' | 'vad' | 'stt' | 'llm' | 'tool' | 'tts' | 'transport'
 
@@ -71,7 +71,9 @@ export function parseVoiceAgentEvent(value: string): VoiceAgentEvent | null {
     if ((payload.type === 'transcript' || payload.type === 'assistant_response') && typeof payload.turn_id === 'string' && typeof payload.text === 'string') {
       if (payload.type === 'transcript') return { ...base, type: 'transcript', turn_id: payload.turn_id, text: payload.text, is_final: payload.is_final === true }
       const rawTool = payload.tool
-      const tool = typeof rawTool === 'object' && rawTool !== null && (rawTool as Record<string, unknown>).provider === 'mock' && (rawTool as Record<string, unknown>).demo === true && ((rawTool as Record<string, unknown>).name === 'calendar.list_events' || (rawTool as Record<string, unknown>).name === 'calendar.create_event') ? rawTool as ToolBadge : null
+      const rawToolRecord = typeof rawTool === 'object' && rawTool !== null ? rawTool as Record<string, unknown> : null
+      const validToolMarker = rawToolRecord?.provider === 'mock' && rawToolRecord.demo === true || rawToolRecord?.provider === 'google_mcp' && rawToolRecord.demo === false
+      const tool = rawToolRecord !== null && validToolMarker && (rawToolRecord.name === 'calendar.list_events' || rawToolRecord.name === 'calendar.create_event') ? rawToolRecord as ToolBadge : null
       return { ...base, type: 'assistant_response', turn_id: payload.turn_id, text: payload.text, is_final: payload.is_final !== false, tool }
     }
     return null
@@ -108,10 +110,11 @@ function upsertMessage(state: ConversationState, message: Omit<ChatMessage, 'cre
 }
 
 function provisionalLabel(state: VoiceAgentState): string | null {
-  if (state === 'listening') return 'Listening…'
-  if (state === 'transcribing') return 'Transcribing…'
-  if (state === 'thinking') return 'Thinking…'
-  return null
+  // Restore the useful old Conversation behavior: after final ASR, reserve
+  // the Agent bubble immediately so the user sees that an answer is being
+  // generated. Do not create faux user bubbles for listening/transcribing;
+  // only a final transcript is user-visible conversation content.
+  return state === 'thinking' ? 'Thinking…' : null
 }
 
 export function reduceConversation(
@@ -136,8 +139,6 @@ export function reduceConversation(
         ? { ...next, notice: event.message }
         : next
     }
-    const label = provisionalLabel(event.state)
-    const messageRole = event.state === 'thinking' ? 'assistant' : event.state === 'listening' || event.state === 'transcribing' ? 'user' : null
     next = {
         ...next,
         turnStates: {
@@ -145,10 +146,18 @@ export function reduceConversation(
           [event.turn_id]: { state: event.state, stage: event.stage, message: event.message, sequence: event.sequence ?? Number.MAX_SAFE_INTEGER, updatedAt: Date.now() },
         },
     }
-    if (messageRole && label) {
-      const existing = next.messages.find((item) => item.turnId === event.turn_id && item.role === messageRole)
+    const label = provisionalLabel(event.state)
+    if (label) {
+      const existing = next.messages.find((item) => item.turnId === event.turn_id && item.role === 'assistant')
       if (!existing || existing.provisional) {
-        next = upsertMessage(next, { id: event.message_id, turnId: event.turn_id, role: messageRole, text: label, provisional: true, isFinal: false })
+        next = upsertMessage(next, {
+          id: event.message_id,
+          turnId: event.turn_id,
+          role: 'assistant',
+          text: label,
+          provisional: true,
+          isFinal: false,
+        })
       }
     }
     return next
@@ -156,6 +165,8 @@ export function reduceConversation(
   if (event.type === 'transcript') {
     if (!event.is_final) return withSequence(next, event)
     next = upsertMessage(next, { id: event.message_id, turnId: event.turn_id, role: 'user', text: event.text, provisional: false, isFinal: true })
+    // A final transcript supersedes the temporary STT state in the footer;
+    // it does not create a second, synthetic message.
     return withSequence(next, event)
   }
   next = upsertMessage(next, {

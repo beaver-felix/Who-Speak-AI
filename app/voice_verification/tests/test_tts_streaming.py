@@ -44,6 +44,23 @@ def test_zerotts_provider_yields_stream_chunks_without_waiting_for_full_audio() 
     assert chunks[0].audio == np.array([3276, 6553], dtype="<i2").tobytes()
 
 
+def test_zerotts_provider_flushes_short_audio_when_worker_finishes_before_sentinel() -> None:
+    class Model:
+        def synthesize_stream(self, text, *, voice):
+            yield np.array([[0.25]], dtype=np.float32)
+
+    provider = ZeroTTSLocalProvider(queue_max_chunks=2, startup_buffer_ms=250)
+    provider._model = Model()
+
+    async def collect() -> list[TTSChunk]:
+        return [chunk async for chunk in provider.stream("ok")]
+
+    chunks = asyncio.run(collect())
+
+    assert len(chunks) == 1
+    assert chunks[0].audio == np.array([8191], dtype="<i2").tobytes()
+
+
 def test_tts_service_uses_fallback_only_before_primary_first_audio() -> None:
     class Provider:
         def __init__(self, name, chunks=None, error=None):

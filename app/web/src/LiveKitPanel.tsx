@@ -33,6 +33,7 @@ export function LiveKitPanel() {
       onResumeConversation={() => void session.sendAuthCommand(RESUME_CONVERSATION)}
       onContinueAsGuest={() => void session.sendAuthCommand(CONTINUE_AS_GUEST)}
       onRetryVoice={() => void session.sendAuthCommand(RETRY_VOICE)}
+      onRetrySession={() => void session.retrySession()}
       onEnableAudio={() => void session.enableAudio()}
       onOpenConversation={() => setMobileConversationOpen(true)}
     />

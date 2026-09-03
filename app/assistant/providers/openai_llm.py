@@ -38,6 +38,8 @@ class OpenAIResponsesProvider(LLMProvider):
         instructions = (
             "You are a helpful voice assistant. Keep answers concise and natural when spoken. "
             "Follow the capability policy. "
+            "Use trusted current-time context and Calendar tool results supplied by the application; "
+            "never invent dates, times, events, or successful Calendar access. "
             f"Capabilities available for this request: {', '.join(sorted(allowed_tools)) or 'none'}."
         )
         return {

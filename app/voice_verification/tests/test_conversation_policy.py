@@ -15,9 +15,11 @@ from voiceauth.matching import VerificationResult
 class FakeLLM:
     def __init__(self) -> None:
         self.allowed_tools: set[str] | None = None
+        self.prompts: list[str] = []
 
     async def respond(self, transcript, *, allowed_tools, auth_context) -> str:
         self.allowed_tools = allowed_tools
+        self.prompts.append(transcript)
         return "safe response"
 
 
@@ -25,10 +27,12 @@ class FakeCalendar:
     def __init__(self) -> None:
         self.calls = 0
         self.user_ids: list[str] = []
+        self.ranges: list[tuple[datetime, datetime]] = []
 
     async def list_events(self, *, user_id, start, end) -> CalendarResult:
         self.calls += 1
         self.user_ids.append(user_id)
+        self.ranges.append((start, end))
         event = CalendarEvent("event", user_id, "Demo meeting", start, end)
         return CalendarResult("mock", True, user_id, (event,))
 
@@ -70,6 +74,36 @@ def test_authenticated_calendar_request_is_explicitly_marked_as_mock() -> None:
     assert tool_result["provider"] == "mock"
     assert tool_result["demo"] is True
     assert llm.allowed_tools == {"general_qa", "calendar.list_events", "calendar.create_event"}
+
+
+def test_authenticated_today_request_resolves_the_window_before_calendar_call() -> None:
+    llm, calendar = FakeLLM(), FakeCalendar()
+    session = AuthSession(ttl=timedelta(minutes=5))
+    identity = str(uuid4())
+    session.begin_private_auth()
+    decision = session.complete_verification(VerificationResult(True, identity, "An", 0.9, 1, identity))
+    supervisor = ConversationSupervisor(
+        llm=llm,
+        calendar=calendar,
+        account_id="account-today",
+        timezone_name="Asia/Ho_Chi_Minh",
+        clock=lambda: datetime(2026, 9, 3, 5, 30, tzinfo=UTC),
+    )
+
+    response, tool_result = asyncio.run(
+        supervisor.respond("Bạn xem lịch hôm nay giúp tôi", auth=decision)
+    )
+
+    assert response == "safe response"
+    assert tool_result is not None
+    assert calendar.ranges == [
+        (
+            datetime(2026, 9, 2, 17, 0, tzinfo=UTC),
+            datetime(2026, 9, 3, 17, 0, tzinfo=UTC),
+        )
+    ]
+    assert "Trusted current time context" in llm.prompts[0]
+    assert "'label': 'today'" in llm.prompts[0]
 
 
 def test_authenticated_create_request_is_a_local_demo_event() -> None:

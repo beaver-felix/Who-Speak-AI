@@ -24,7 +24,7 @@ from app.assistant.pipecat_runtime.stt import LocalWhisperSTTService
 from app.assistant.providers.tts_factory import build_tts_stack
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
 from app.assistant.providers.whisper_local import LocalWhisperProvider
-from app.assistant.tools.calendar import MockCalendarProvider
+from app.assistant.tools.calendar import GatewayCalendarProvider, MockCalendarProvider
 from app.assistant.voice_service import build_account_voice_auth_gate
 from app.assistant_gateway.main import GatewaySettings
 from app.assistant_gateway.store import GatewayStore
@@ -110,11 +110,27 @@ async def run_pipecat_session(
         ) from error
 
     gateway = GatewaySettings.from_environment()
-    if gateway.mcp_provider != "mock" or not gateway.mock_calendar_enabled:
-        raise RuntimeError("PIPECAT local mode requires MCP_PROVIDER=mock and MOCK_CALENDAR_ENABLED=true.")
-    store = GatewayStore(gateway.database_path)
-    store.initialize()
-    calendar = MockCalendarProvider(store)
+    if gateway.mcp_provider == "mock":
+        if not gateway.mock_calendar_enabled:
+            raise RuntimeError("Mock calendar is disabled.")
+        store = GatewayStore(gateway.database_path)
+        store.initialize()
+        calendar = MockCalendarProvider(store)
+        enabled_private_tools = {"calendar.list_events", "calendar.create_event"}
+    else:
+        if len(gateway.pipecat_supervisor_secret) < 32:
+            raise RuntimeError("PIPECAT_SUPERVISOR_SECRET must be at least 32 characters for MCP tool calls.")
+        calendar = GatewayCalendarProvider(
+            gateway_url=gateway.gateway_url,
+            session_id=descriptor.session_id,
+            room_name=descriptor.room_name,
+            internal_secret=gateway.pipecat_supervisor_secret,
+            account_id=descriptor.user_id,
+            timeout_seconds=gateway.google_mcp_timeout_seconds,
+        )
+        # Read-only rollout: create_event remains unavailable until the
+        # confirmation/idempotency flow has been implemented.
+        enabled_private_tools = {"calendar.list_events"}
     gate = await asyncio.to_thread(build_account_voice_auth_gate, descriptor.user_id)
     auth_controller = VoiceAuthChallengeController(
         gate=gate,
@@ -123,7 +139,7 @@ async def run_pipecat_session(
         capture_seconds=active.auth_challenge_seconds,
     )
 
-    from pipecat.frames.frames import InterruptionFrame
+    from pipecat.frames.frames import InterruptionFrame, StartFrame
 
     transport = LiveKitTransport(
         active.livekit_url,
@@ -149,6 +165,7 @@ async def run_pipecat_session(
         llm=OpenAIResponsesProvider(OpenAISettings.from_environment()),
         calendar=calendar,
         account_id=descriptor.user_id,
+        enabled_private_tools=enabled_private_tools,
     )
     room_id_hash = hashlib.sha256(descriptor.room_name.encode("utf-8")).hexdigest()[:16]
     conversation_processor: PipecatConversationProcessor
@@ -282,13 +299,18 @@ async def run_pipecat_session(
         max_wait_seconds=active.smart_turn_max_wait_seconds,
     )
     whisper_provider = LocalWhisperProvider(
-        model_name=active.whisper_model, device=active.whisper_device
+        model_name=active.whisper_model,
+        device=active.whisper_device,
+        compute_type=active.whisper_compute_type,
+        cpu_threads=active.whisper_cpu_threads if active.whisper_device == "cpu" else None,
     )
     logger.info(
-        "pipecat_local_model_warmup session_id=%s model=%s device=%s",
+        "pipecat_local_model_warmup session_id=%s model=%s device=%s compute_type=%s cpu_threads=%s",
         descriptor.session_id,
         active.whisper_model,
         active.whisper_device,
+        active.whisper_compute_type,
+        active.whisper_cpu_threads if active.whisper_device == "cpu" else None,
     )
     try:
         await asyncio.to_thread(whisper_provider.warmup)
@@ -339,6 +361,15 @@ async def run_pipecat_session(
         observers=[latency_observer],
         enable_rtvi=False,
         idle_timeout_secs=None,
+        setup_timeout_secs=active.pipeline_setup_timeout_seconds,
+        start_timeout_secs=active.pipeline_start_timeout_seconds,
+    )
+
+    logger.info(
+        "pipecat_pipeline_timeouts session_id=%s setup_timeout_seconds=%s start_timeout_seconds=%s idle_timeout=None",
+        descriptor.session_id,
+        active.pipeline_setup_timeout_seconds,
+        active.pipeline_start_timeout_seconds,
     )
 
     @worker.event_handler("on_pipeline_started")
@@ -356,6 +387,16 @@ async def run_pipecat_session(
             descriptor.session_id,
             type(frame).__name__,
         )
+        # PipelineWorker also emits this event when cancellation cannot drain
+        # in time. That is a shutdown problem, not a startup failure; exposing
+        # it as a startup error makes the browser enter a misleading retry loop.
+        if not isinstance(frame, StartFrame):
+            logger.warning(
+                "pipecat_pipeline_timeout_during_shutdown session_id=%s frame=%s",
+                descriptor.session_id,
+                type(frame).__name__,
+            )
+            return
         await sink.send_event(
             "session_status",
             status=VoiceAgentSessionStatus.FAILED,
@@ -526,8 +567,9 @@ async def run_pipecat_session(
     async def on_participant_disconnected(_transport, participant_id: str) -> None:
         if participant_id == descriptor.participant_identity:
             logger.info(
-                "pipecat_browser_disconnected session_id=%s phase=%s",
+                "pipecat_browser_disconnected room_event=browser_disconnected connection_state=disconnected disconnect_reason=participant_left session_id=%s room_id_hash=%s phase=%s",
                 descriptor.session_id,
+                room_id_hash,
                 auth_router.challenge_status().phase.value,
             )
             # A reconnect receives a new descriptor and a new AuthSession; this
@@ -537,8 +579,9 @@ async def run_pipecat_session(
     @transport.event_handler("on_disconnected")
     async def on_transport_disconnected(_transport) -> None:
         logger.warning(
-            "pipecat_transport_disconnected session_id=%s phase=%s auth_state=%s",
+            "pipecat_transport_disconnected room_event=transport_disconnected connection_state=disconnected disconnect_reason=transport_event session_id=%s room_id_hash=%s phase=%s auth_state=%s",
             descriptor.session_id,
+            room_id_hash,
             auth_router.challenge_status().phase.value,
             auth_router.auth_state.state.value,
         )
