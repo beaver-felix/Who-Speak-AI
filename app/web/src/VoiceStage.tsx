@@ -14,6 +14,7 @@ type VoiceStageProps = {
   levels: AudioLevels
   microphoneEnabled: boolean
   audioPlayback: AudioPlaybackState
+  authCommandPending: boolean
   conversationCount: number
   error: string | null
   onJoin: () => void
@@ -98,6 +99,7 @@ export function VoiceStage({
   levels,
   microphoneEnabled,
   audioPlayback,
+  authCommandPending,
   conversationCount,
   error,
   onJoin,
@@ -147,7 +149,7 @@ export function VoiceStage({
     <div className="voice-controls" aria-label="Voice controls">
       {!connected ? <button className="primary" type="button" onClick={onJoin} disabled={connection === 'connecting' || connection === 'reconnecting'}>{connection === 'reconnecting' ? 'Đang kết nối lại…' : connection === 'connecting' ? 'Đang tham gia…' : 'Join local room'}</button> : <>
         <button className="secondary" type="button" onClick={onToggleMicrophone} aria-pressed={microphoneEnabled}>{microphoneEnabled ? 'Tắt microphone' : 'Bật microphone'}</button>
-        {challengeCapturing || challengeProcessing ? <button className="primary" type="button" onClick={onCancelChallenge} disabled={!sessionReady}>{challengeProcessing ? 'Hủy kiểm tra' : 'Hủy voice challenge'}</button> : challengeWaiting ? auth.state === 'authenticated' ? <button className="primary" type="button" onClick={onResumeConversation} disabled={!sessionReady || !auth.canResume}>Bắt đầu nói với Agent</button> : <><button className="primary" type="button" onClick={onContinueAsGuest} disabled={!sessionReady || !auth.canResume}>Tiếp tục ở Guest</button><button className="secondary" type="button" onClick={onRetryVoice} disabled={!sessionReady}>Thử lại voice</button></> : <button className="primary" type="button" onClick={startChallenge} disabled={!sessionReady || auth.state === 'authenticated'}>{auth.state === 'authenticated' ? 'Đã mở private mode' : 'Xác thực voice'}</button>}
+        {challengeCapturing || challengeProcessing ? <button className="primary" type="button" onClick={onCancelChallenge} disabled={!sessionReady || authCommandPending}>{challengeProcessing ? 'Hủy kiểm tra' : 'Hủy voice challenge'}</button> : challengeWaiting ? auth.state === 'authenticated' ? <button className="primary" type="button" onClick={onResumeConversation} disabled={!sessionReady || !auth.canResume || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Bắt đầu nói với Agent'}</button> : <><button className="primary" type="button" onClick={onContinueAsGuest} disabled={!sessionReady || !auth.canResume || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Tiếp tục ở Guest'}</button><button className="secondary" type="button" onClick={onRetryVoice} disabled={!sessionReady || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : 'Thử lại voice'}</button></> : <button className="primary" type="button" onClick={startChallenge} disabled={!sessionReady || auth.state === 'authenticated' || authCommandPending}>{authCommandPending ? 'Đang xử lý…' : auth.state === 'authenticated' ? 'Đã mở private mode' : 'Xác thực voice'}</button>}
         <button className="danger" type="button" onClick={onLeave}>Leave room</button>
       </>}
       {audioPlayback === 'blocked' && <button className="audio-recovery" type="button" onClick={onEnableAudio}>Bật âm thanh Agent</button>}

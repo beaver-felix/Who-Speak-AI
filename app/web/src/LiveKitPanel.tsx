@@ -22,6 +22,7 @@ export function LiveKitPanel() {
       levels={levels}
       microphoneEnabled={session.microphoneEnabled}
       audioPlayback={session.audioPlayback}
+      authCommandPending={session.authCommandPending}
       conversationCount={session.conversation.messages.length}
       error={session.error}
       onJoin={() => void session.join()}

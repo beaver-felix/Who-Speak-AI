@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 import numpy as np
 from pipecat.frames.frames import ErrorFrame, Frame, TranscriptionFrame
 from pipecat.services.stt_service import SegmentedSTTService
+from pipecat.services.settings import STTSettings
 from pipecat.transcriptions.language import Language
 from pipecat.utils.time import time_now_iso8601
 
@@ -28,9 +29,31 @@ class LocalWhisperSTTService(SegmentedSTTService):
         sample_rate: int = 16_000,
         language: str = "vi",
     ) -> None:
-        super().__init__(sample_rate=sample_rate, audio_passthrough=False)
+        # Pipecat 1.8.x validates service settings at StartFrame.  A local
+        # adapter still needs to provide concrete values even though the
+        # actual model is owned by faster-whisper rather than Pipecat.
+        super().__init__(
+            sample_rate=sample_rate,
+            audio_passthrough=False,
+            settings=STTSettings(
+                model="local-faster-whisper",
+                language=language,
+            ),
+        )
         self._provider = provider
         self._language = language
+
+    @property
+    def supports_ttfs(self) -> bool:
+        """Tell Pipecat that this adapter has no extra server-side TTFS wait.
+
+        Turn completion is owned by the upstream Silero VAD + Smart Turn
+        processors. Advertising the default STT P99 here would make Pipecat
+        assume an additional one-second wait and would also produce a noisy
+        startup warning.
+        """
+
+        return False
 
     @property
     def wants_wav_segments(self) -> bool:

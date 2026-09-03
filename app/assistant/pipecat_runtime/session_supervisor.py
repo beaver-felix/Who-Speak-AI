@@ -105,7 +105,17 @@ class PipecatSessionSupervisor:
                 return
             error = done.exception()
             if error:
-                logger.error("pipecat_session_failed session_id=%s: %s", descriptor.session_id, error)
+                logger.error(
+                    "pipecat_session_failed session_id=%s: %s",
+                    descriptor.session_id,
+                    error,
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+            else:
+                logger.warning(
+                    "pipecat_session_finished_without_error session_id=%s",
+                    descriptor.session_id,
+                )
 
         task.add_done_callback(finished)
         logger.info(

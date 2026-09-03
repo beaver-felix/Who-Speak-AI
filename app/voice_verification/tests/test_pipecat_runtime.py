@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.assistant.contracts import AuthDecision, AuthState
 from app.assistant.auth_controller import VoiceAuthChallengeController
 from app.assistant.auth_session import AuthSession
-from app.assistant.events_bridge import SessionEventSink
+from app.assistant.events_bridge import SessionEventSink, parse_agent_command
 from app.assistant.pipecat_runtime.auth_router import AuthRouterProcessor
 from app.assistant.pipecat_runtime.conversation import PipecatConversationProcessor
 from app.assistant.pipecat_runtime.runtime import cancel_if_participant_absent
@@ -39,6 +39,21 @@ from pipecat.processors.frame_processor import FrameDirection
 from pipecat.utils.asyncio.task_manager import TaskManager
 from pipecat.utils.base_object import BaseObject
 from voiceauth.matching import VerificationResult
+
+
+def test_agent_command_parser_accepts_json_and_legacy_wire_formats() -> None:
+    assert parse_agent_command(b'retry_voice') == ("retry_voice", None)
+    assert parse_agent_command(b'{"action":"continue_as_guest"}') == (
+        "continue_as_guest",
+        {"action": "continue_as_guest"},
+    )
+    assert parse_agent_command('{"action":"retry","turn_id":"turn-1"}') == (
+        "retry",
+        {"action": "retry", "turn_id": "turn-1"},
+    )
+    assert parse_agent_command(b'{"action":"   "}') is None
+    assert parse_agent_command(b'"continue_as_guest"') is None
+    assert parse_agent_command(b"\xff") is None
 
 
 def descriptor() -> PipecatSessionDescriptor:
@@ -479,6 +494,15 @@ def test_local_whisper_adapter_emits_final_transcript_without_mlx_import() -> No
     assert isinstance(frames[0], TranscriptionFrame)
     assert frames[0].text == "xin chào"
     assert frames[0].finalized is True
+
+
+def test_local_whisper_adapter_initializes_pipecat_stt_settings() -> None:
+    service = LocalWhisperSTTService(object())
+
+    assert service._settings.model == "local-faster-whisper"
+    assert service._settings.language == "vi"
+    assert service.supports_ttfs is False
+    assert service.service_metadata_frame().ttfs_p99_latency == 0.0
 
 
 def test_browser_event_sink_contains_no_voice_private_material() -> None:

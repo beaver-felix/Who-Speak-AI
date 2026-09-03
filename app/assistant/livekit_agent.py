@@ -20,7 +20,7 @@ from app.assistant.agents.conversation import ConversationSupervisor
 from app.assistant.config import LocalAgentSettings
 from app.assistant.contracts import AuthChallengePhase, AuthDecision, AuthState
 from app.assistant.events import VoiceAgentState, event_payload
-from app.assistant.events_bridge import auth_status_payload
+from app.assistant.events_bridge import auth_status_payload, parse_agent_command
 from app.assistant.livekit_tts import publish_mp3
 from app.assistant.providers.edge_tts_local import EdgeTTSProvider
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
@@ -442,14 +442,12 @@ async def auth_gate_entrypoint(ctx) -> None:
     def on_data_received(packet: rtc.DataPacket) -> None:
         if packet.participant is None:
             return
-        try:
-            command = packet.data.decode("utf-8")
-        except UnicodeDecodeError:
+        parsed = parse_agent_command(packet.data)
+        if parsed is None:
             return
+        command, payload = parsed
         if packet.topic == AGENT_COMMAND_TOPIC:
-            try:
-                payload = json.loads(command)
-            except json.JSONDecodeError:
+            if payload is None:
                 return
             turn_id = payload.get("turn_id")
             if payload.get("action") != "retry" or not isinstance(turn_id, str):
@@ -469,42 +467,63 @@ async def auth_gate_entrypoint(ctx) -> None:
         if packet.topic != AUTH_COMMAND_TOPIC:
             return
         controller = controller_for(packet.participant.identity)
+        logger.info(
+            "livekit_auth_command_received action=%s",
+            command,
+        )
 
         async def handle_auth_command() -> None:
             identity = packet.participant.identity
-            if command in {REQUEST_PRIVATE_MODE, RETRY_VOICE}:
-                active_task = turn_tasks.get(identity)
-                if active_task is not None and not active_task.done():
-                    active_task.cancel()
-                processing_turns.discard(identity)
-                turn_controller_for(identity).begin_authentication()
-                auth_progress_elapsed_ms[identity] = -1
-                if audio_source is not None:
-                    audio_source.clear_queue()
-                decision = controller.request_private_mode()
-            elif command == CANCEL_PRIVATE_MODE:
-                turn_controller_for(identity).reset()
-                decision = controller.cancel()
-                auth_progress_elapsed_ms[identity] = -1
-                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
-            elif command in {RESUME_CONVERSATION, CONTINUE_AS_GUEST}:
-                turn_controller_for(identity).reset()
-                if audio_source is not None:
-                    audio_source.clear_queue()
-                try:
-                    decision = controller.resume_conversation()
-                except RuntimeError:
-                    await send_event(
-                        identity,
-                        event_type="state",
-                        state=VoiceAgentState.ERROR,
-                        message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
-                    )
+            try:
+                if command in {REQUEST_PRIVATE_MODE, RETRY_VOICE}:
+                    active_task = turn_tasks.get(identity)
+                    if active_task is not None and not active_task.done():
+                        active_task.cancel()
+                    processing_turns.discard(identity)
+                    turn_controller_for(identity).begin_authentication()
+                    auth_progress_elapsed_ms[identity] = -1
+                    if audio_source is not None:
+                        audio_source.clear_queue()
+                    decision = controller.request_private_mode()
+                elif command == CANCEL_PRIVATE_MODE:
+                    turn_controller_for(identity).reset()
+                    decision = controller.cancel()
+                    auth_progress_elapsed_ms[identity] = -1
+                    resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
+                elif command in {RESUME_CONVERSATION, CONTINUE_AS_GUEST}:
+                    turn_controller_for(identity).reset()
+                    if audio_source is not None:
+                        audio_source.clear_queue()
+                    try:
+                        decision = controller.resume_conversation()
+                    except RuntimeError:
+                        await send_event(
+                            identity,
+                            event_type="state",
+                            state=VoiceAgentState.ERROR,
+                            message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
+                        )
+                        return
+                    resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
+                else:
                     return
-                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
-            else:
-                return
-            await send_status(identity, decision, controller=controller)
+                await send_status(identity, decision, controller=controller)
+                logger.info(
+                    "livekit_auth_command_applied action=%s phase=%s",
+                    command,
+                    controller.challenge_status().phase.value,
+                )
+            except Exception:
+                logger.exception(
+                    "livekit_auth_command_failed action=%s",
+                    command,
+                )
+                await send_event(
+                    identity,
+                    event_type="state",
+                    state=VoiceAgentState.ERROR,
+                    message="Không thể cập nhật trạng thái voice. Vui lòng thử lại.",
+                )
 
         asyncio.create_task(handle_auth_command())
 

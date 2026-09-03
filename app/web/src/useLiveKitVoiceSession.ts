@@ -28,7 +28,9 @@ export function useLiveKitVoiceSession() {
   const audioElementsRef = useRef<Map<string, HTMLMediaElement[]>>(new Map())
   const joiningRef = useRef(false)
   const rotatingRef = useRef(false)
+  const leavingRef = useRef(false)
   const authSessionIdRef = useRef<string | null>(null)
+  const agentIdentityRef = useRef<string | null>(null)
   const authSequenceRef = useRef(0)
   const [connection, setConnection] = useState<ConnectionState>('idle')
   const [auth, setAuth] = useState<AuthStatus>(initialAuth)
@@ -38,9 +40,21 @@ export function useLiveKitVoiceSession() {
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false)
   const [microphoneTrack, setMicrophoneTrack] = useState<MediaStreamTrack | null>(null)
   const [assistantTracks, setAssistantTracks] = useState<MediaStreamTrack[]>([])
+  const authCommandTimerRef = useRef<number | null>(null)
+  const [authCommandPending, setAuthCommandPending] = useState(false)
+
+  function clearAuthCommandWait() {
+    if (authCommandTimerRef.current !== null) {
+      window.clearTimeout(authCommandTimerRef.current)
+      authCommandTimerRef.current = null
+    }
+    setAuthCommandPending(false)
+  }
 
   useEffect(() => () => {
     rotatingRef.current = false
+    leavingRef.current = true
+    clearAuthCommandWait()
     const room = roomRef.current
     roomRef.current = null
     void room?.disconnect()
@@ -71,7 +85,9 @@ export function useLiveKitVoiceSession() {
   async function join() {
     if (joiningRef.current || roomRef.current) return
     joiningRef.current = true
+    leavingRef.current = false
     authSessionIdRef.current = null
+    agentIdentityRef.current = null
     authSequenceRef.current = 0
     setError(null)
     setConnection('connecting')
@@ -85,6 +101,7 @@ export function useLiveKitVoiceSession() {
       if (status.sessionId) authSessionIdRef.current = status.sessionId
       if (status.sequence !== null && status.sequence <= authSequenceRef.current) return
       if (status.sequence !== null) authSequenceRef.current = status.sequence
+      clearAuthCommandWait()
       setAuth(status)
     }
 
@@ -155,11 +172,23 @@ export function useLiveKitVoiceSession() {
       resetVisibleSession('reconnecting', 'Đang tạo phiên voice mới…')
       void rotateWithFreshToken()
     })
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      // The browser can remain connected after the one-room Pipecat worker
+      // disappears. Without this recovery path the UI keeps the last auth
+      // progress forever while audio is sent to a room with no Agent.
+      if (participant.identity !== token?.agent_identity || leavingRef.current || rotatingRef.current || roomRef.current !== room) return
+      setError('Local Agent đã ngắt kết nối, đang tạo phiên mới…')
+      setConnection('reconnecting')
+      resetVisibleSession('reconnecting', 'Agent đã ngắt kết nối, đang tạo phiên mới…')
+      void rotateWithFreshToken()
+    })
     room.on(RoomEvent.Disconnected, () => {
       // A delayed event from a room replaced during retry/reconnect must not
       // reset the fresh room back to idle.
       if (roomRef.current !== room && !rotatingRef.current) return
       if (roomRef.current === room) roomRef.current = null
+      if (agentIdentityRef.current === token?.agent_identity) agentIdentityRef.current = null
+      clearAuthCommandWait()
       cleanAudioElements()
       setMicrophoneEnabled(false)
       setMicrophoneTrack(null)
@@ -175,6 +204,7 @@ export function useLiveKitVoiceSession() {
 
     try {
       token = await api.livekitToken()
+      agentIdentityRef.current = token.agent_identity
       room.prepareConnection(token.server_url, token.participant_token)
       await room.connect(token.server_url, token.participant_token)
       roomRef.current = room
@@ -201,6 +231,7 @@ export function useLiveKitVoiceSession() {
   }
 
   async function leave() {
+    leavingRef.current = true
     rotatingRef.current = false
     const room = roomRef.current
     if (room) await room.disconnect()
@@ -209,6 +240,7 @@ export function useLiveKitVoiceSession() {
 
   async function retrySession() {
     if (joiningRef.current) return
+    leavingRef.current = false
     const room = roomRef.current
     if (room) {
       rotatingRef.current = true
@@ -247,9 +279,23 @@ export function useLiveKitVoiceSession() {
       return
     }
     try {
+      if (authCommandTimerRef.current !== null) window.clearTimeout(authCommandTimerRef.current)
+      setAuthCommandPending(true)
+      setError(null)
       if (command === REQUEST_PRIVATE_MODE) conversationDispatch({ type: 'clear_notice' })
-      await room.localParticipant.publishData(new TextEncoder().encode(command), { reliable: true, topic: AUTH_COMMAND_TOPIC })
+      const wireCommand = JSON.stringify({ action: command })
+      await room.localParticipant.publishData(new TextEncoder().encode(wireCommand), {
+        reliable: true,
+        topic: AUTH_COMMAND_TOPIC,
+        destinationIdentities: agentIdentityRef.current ? [agentIdentityRef.current] : undefined,
+      })
+      authCommandTimerRef.current = window.setTimeout(() => {
+        authCommandTimerRef.current = null
+        setAuthCommandPending(false)
+        setError('Agent không phản hồi yêu cầu voice. Hãy khởi động lại Pipecat supervisor rồi thử lại.')
+      }, 3000)
     } catch (caught) {
+      clearAuthCommandWait()
       setError(toError(caught, 'Không thể liên hệ Auth Gate.'))
     }
   }
@@ -285,6 +331,7 @@ export function useLiveKitVoiceSession() {
     conversation,
     error,
     audioPlayback,
+    authCommandPending,
     microphoneEnabled,
     microphoneTrack,
     assistantTracks,
