@@ -160,4 +160,29 @@ Traditional systems require decrypting biometrics in server memory before evalua
 
 \subsection{Verifying of Enrollment Quality}
 
+While advanced enrollment quality verification---such as data-centric utterance filtering \cite{le2025datacentric} and phoneme-balanced selection \cite{longquocandnhut}---was planned to ensure robust reference templates, we candidly acknowledge that it has not been implemented due to project time constraints.
+
+Currently, enrollment quality is restricted to basic heuristics in \texttt{validate\_speech\_sample}: rejecting clips shorter than 4.0~seconds or with $\text{RMS} < 0.002$. The three candidate RawNet3 embeddings are simply averaged and $L_2$-normalized ($\mathbf{u} = \frac{1}{3}\sum_{k=1}^3 \mathbf{u}_k$, $\|\mathbf{u}\|_2 = 1$) before CKKS encryption, without evaluating inter-utterance similarity or phonetic richness. Implementing automated enrollment quality verification remains an acknowledged limitation and future work.
 \subsection{Latency}
+
+End-to-end response latency is defined as the elapsed time from the user ceasing to speak (i.e., VAD-detected end of utterance) to the first audible audio sample produced by the assistant's voice output---a voice-in to voice-out interval encompassing VAD silence detection, Whisper ASR decoding, GPT-5 inference and streaming, sentence chunking, and TTS synthesis onset. It was evaluated over $N = 10$ trials using manual stopwatch timing. The raw per-trial recordings have since been lost; only the summary statistics reported at the time of measurement are available. Table~\ref{tab:latency-summary} presents the aggregate results.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Number of trials ($N$) & 10 \\
+Mean latency ($\bar{t}$) & 7.5~s \\
+Standard deviation ($\sigma$) & 2.1~s \\
+Variance ($\sigma^2$) & 4.4~s$^2$ \\
+\bottomrule
+\end{tabular}
+\caption{End-to-end response latency summary. Measured manually with a stopwatch over 10 trials; individual trial data are unavailable.}
+\label{tab:latency-summary}
+\end{table}
+
+The elevated mean latency (7.5~s) and standard deviation ($\sigma = 2.1$~s) reflect the cumulative overhead of the local processing chain: Whisper \texttt{base} CPU inference, OpenAI GPT-5 network round-trip, ZeroTTS ONNX warmup and synthesis, and LiveKit media routing. The large spread is consistent with non-deterministic CPU scheduling and network jitter under a local development environment. A dedicated latency profiling run with automated timestamps (e.g., via the \texttt{UserBotLatencyObserver} already instrumented in the Pipecat runtime) is left as future work.
+
