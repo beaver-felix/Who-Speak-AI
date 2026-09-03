@@ -13,11 +13,124 @@ Who-Speak-AI adopts a decoupled multi-service architecture (Figure~\ref{fig:app-
 
 \subsubsection{User Interface}
 
+Who-Speak-AI provides a browser client and a diagnostic dashboard:
+
+\textbf{Production Web Application (\texttt{app/web}).} Built with React 19, TypeScript 5.7, and Vite 7. The Vite dev server reverse-proxies \texttt{/api} calls to the Assistant Gateway. The UI uses Vanilla CSS with a dark-mode palette, glassmorphism cards, and CSS grids.
+
+The interface consists of four primary modules:
+\begin{itemize}
+    \item \textbf{Coordinator:} Manages user registration/login, scrypt credentials, HttpOnly session cookies, three-sample voice enrollment modals, and WebRTC room initialization.
+
+    \item \textbf{Voice Stage:} An animated voice orb visualizing real-time RMS audio energy from local microphone and remote assistant streams via Web Audio API, indicating \emph{Idle}, \emph{Listening}, \emph{Thinking}, \emph{Speaking}, and \emph{Challenging} states.
+
+    \item \textbf{Conversation Feed:} Displays streaming transcripts, role-based message bubbles, privacy authorization badges (\emph{Guest} vs.\ \emph{Verified Owner}), tool execution receipts, and interactive biometric challenge modals with live waveform visualizers and countdown timers.
+
+    \item \textbf{Hardware Telemetry:} Controls audio I/O device selection, mute toggling, connection status, and WebRTC transport telemetry.
+\end{itemize}
+
+\textbf{Client-Side Audio Engineering.} Microphones are captured via a Web Audio API, downmixing multi-channel input to mono 16-bit linear PCM WAV at 16~kHz for enrollment and verification. Full-duplex WebRTC streaming is managed by \texttt{livekit-client} 2.22.0 across dedicated data-channel topics: \texttt{voice-auth} (commands), \texttt{voice-auth-status} (auth state), \texttt{voice-agent-event} (pipeline events), and \texttt{voice-agent-command} (agent control).
+
+\textbf{Diagnostic Dashboard.} A Streamlit application supporting offline verification, identification, waveform/spectrogram inspection, and ROC/DET threshold calibration.
+
 \subsubsection{Runtimes}
+
+Who-Speak-AI coordinates multiple backend, transport, and agent runtimes:
+
+\textbf{System \& WebRTC Transport.} The backend operates on Python 3.12; the frontend runs on Node.js. The media routing is handled by \textbf{LiveKit Server} (SFU) using asymmetric Opus streams for high-fidelity speech synthesis.
+
+\textbf{Conversational Pipeline (Pipecat).} Conversational flow is orchestrated by \textbf{Pipecat} through a framed asynchronous dataflow:
+\begin{equation}
+\begin{aligned}
+    \text{LiveKit In} &\longrightarrow \text{AuthRouter} \longrightarrow \text{VAD} \longrightarrow \text{Smart Turn} \\
+    &\longrightarrow \text{Whisper STT} \longrightarrow \text{Conversation} \longrightarrow \text{TTS} \longrightarrow \text{LiveKit Out}
+\end{aligned}
+\end{equation}
+Pipelines run within asynchronous worker tasks instrumented with a latency observer measuring end-to-end user-to-bot latency.
+
+\textbf{Session Supervisor.} A FastAPI daemon on port 8021 spawns per-room Pipecat workers authenticated by HMAC-SHA256 signed session descriptors from the Gateway. It enforces configurable participant join timeouts (default 45~s) and reclaims worker resources upon room termination.
+
+\textbf{Alternate Worker Runtime.} A secondary agent implementation using \textbf{LiveKit Agents} connects directly to the LiveKit server room bus, supporting tool execution via the Model Context Protocol (MCP).
+
+\textbf{Microservices Architecture.} Two FastAPI services handle business and cryptographic logic:
+\begin{itemize}
+    \item \textbf{Assistant Gateway:} Manages user registration, login with scrypt password hashing, 32-byte secure session cookies, multi-sample voice enrollment, and signed LiveKit room JWT tokens.
+    \item \textbf{Matcher API:} Stores public CKKS contexts and encrypted voiceprints in SQLite. Protected by a shared bearer token, it executes ciphertext-only matching without accessing plaintext embeddings.
+\end{itemize}
 
 \subsubsection{Model and Agent}
 
-\subsection{Privacy-Preserving Voice Authentication}
+The intelligence and security tier of Who-Speak-AI integrates neural acoustic modeling, endpointing, large language modeling, speech recognition, speech synthesis, and homomorphic speaker verification. Table~\ref{tab:architecture-stack} provides a complete component inventory.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Functional Subsystem} & \textbf{Core Technology / Model} & \textbf{Runtime / Version} & \textbf{Operational Configuration} \\
+\midrule
+Voice Activity Detection & Silero VAD v5 & Pipecat / PyTorch & Confidence $\ge 0.7$, 300~ms onset, 450~ms silence offset (configurable). \\
+Turn-Taking \& Endpointing & Smart Turn v3 (\texttt{onnx}) & ONNX Runtime $\ge 1.17$ & Semantic end-of-turn classification; suppresses premature interruption. \\
+Speech-to-Text (ASR) & faster-whisper (\texttt{base}) & CTranslate2 & 16~kHz mono Vietnamese (\texttt{vi}) transcription; in-memory decoding. \\
+Conversational Reasoning & OpenAI GPT-5 & AsyncOpenAI & Streaming dialogue agent; strictly isolated from biometrics. \\
+Streaming Chunking & SentenceBuffer & Custom Regex & Punctuation boundary slicing ($\ge 120$ chars) for low TTFA. \\
+Neural Speech Synthesis & ZeroTTS (\texttt{maichi} voice) & ONNX Runtime 0.1.1 & Local 48~kHz mono neural stream; fallback to Azure Edge-TTS. \\
+Speaker Verification & RawNet3 (ViMD fine-tuned) & PyTorch / Sinc-Conv & 16.28M params; 256-D $L_2$-normalized raw waveform embedding. \\
+Homomorphic Encryption & TenSEAL (CKKS scheme) & TenSEAL 0.3.16 & $N=8192, Q=[60,40,40,60], \Delta=2^{40}$; 128-bit security. \\
+Secret Key Protection & OS Hardware Keychain & Python \texttt{keyring} 25.x & Stores CKKS secret key $\text{sk}$; fails closed if unavailable. \\
+Tool Policy Enforcement & PolicyToolExecutor & Native Python & State-gated execution of \texttt{MockCalendarProvider}. \\
+\bottomrule
+\end{tabularx}
+\caption{Comprehensive technical inventory of models, runtimes, and functional subsystems in Who-Speak-AI.}
+\label{tab:architecture-stack}
+\end{table}
+
+\textbf{Voice Activity Detection (Silero VAD v5).} The model computes speech probabilities per 20~ms frame from incoming 16~kHz 16-bit linear PCM audio frames:
+\begin{itemize}
+    \item \textbf{Vocal Onset:} Speech is confirmed once frame probability satisfies $p \ge 0.7$ continuously for at least 300~ms (\texttt{VOICE\_VAD\_MIN\_SPEECH\_SECONDS}).
+    \item \textbf{Vocal Offset:} Silence is recognized when frame probability drops below threshold for 450~ms (\texttt{VOICE\_VAD\_SILENCE\_SECONDS}), triggering downstream turn evaluation.
+\end{itemize}
+
+\textbf{Turn-Taking and Endpointing (Smart Turn v3).} Conventional fixed-silence timers prematurely interrupt speakers during natural cognitive pauses. Who-Speak-AI integrates Smart Turn v3 (\texttt{smart\_turn\_v3.onnx}) running on ONNX Runtime ($\ge 1.17$). When Silero signals silence, Smart Turn ingests the audio buffer (up to 8.0~s) and executes an end-of-turn classifier evaluating prosodic, acoustic, and linguistic completion cues. If the turn is predicted to be ongoing, cut-off is suppressed up to a configurable maximum wait. An in-memory RMS turn buffer (\texttt{LocalSpeechTurnBuffer}, amplitude threshold 0.012) provides a deterministic fallback.
+
+\textbf{Speech-to-Text (faster-whisper).} User speech is transcribed locally using \texttt{faster-whisper} (CTranslate2-accelerated inference of the Whisper \texttt{base} architecture). Operating at 16~kHz mono with a forced language prior (\texttt{language="vi"}), the engine decodes audio directly in system memory. No audio waveforms or transcripts are logged to disk or dispatched to third-party transcription APIs.
+
+\textbf{Conversational Reasoning (OpenAI GPT-5).} Clean transcripts are dispatched to OpenAI GPT-5 with disabled server-side retention. The cognitive core is strictly decoupled from Voice Verification data:
+\begin{itemize}
+    \item \textbf{Deterministic Capability Policy:} Dialogue policy is governed by \texttt{ConversationSupervisor} and \texttt{SupervisorPolicy}. The LLM is restricted to generating natural-language text. Tool execution orchestrated explicitly to verify user and inject only accessible capability signatures (\texttt{allowed\_tools}).
+    \item \textbf{Token Chunking:} To minimize Time-to-First-Audio (TTFA) latency, text is cleanly partitioned at the nearest preceding word boundary and sent to TTS, then LLM generation with audio synthesis.
+\end{itemize}
+
+\textbf{Neural Speech Synthesis.} Audio vocalization uses a dual-engine architecture:
+\begin{itemize}
+    \item \textbf{Primary Engine - ZeroTTS:} A local neural TTS model running under ONNX Runtime with multi-threaded inference. Using preset Vietnamese weights (\texttt{maichi}), it synthesizes 48~kHz mono audio with a 150--250~ms startup buffer.
+    \item \textbf{Fallback Engine - EdgeTTS:} If ZeroTTS encounters initialization or hardware failures, the pipeline dynamically fails over to Microsoft Edge-TTS, streaming Azure's {\texttt{vi-VN-HoaiMyNeural}} voice.
+\end{itemize}
+
+\textbf{Biometric Feature Extraction (RawNet3).} Biometric identity verification is powered by our fine-tuned RawNet3 model (16.28M parameters). RawNet3 processes raw 16~kHz mono PCM waveforms ($\ge 3.0$~s) directly in the time domain:
+\begin{enumerate}
+    \item \textbf{Time-Domain Feature Extraction:} A parameterized Sinc-convolution filterbank replaces standard Short-Time Fourier Transform (STFT) or log-mel spectrogram computation, preserving phase information.
+    \item \textbf{Deep Representation:} Filterbank outputs pass through a modified Res2Net architecture enhanced with Alpha-Feature-Map Scaling (AFMS) and Squeeze-and-Excitation (SE) channel blocks.
+    \item \textbf{Embedding Normalization:} The model outputs a continuous 256-dimensional speaker embedding $\mathbf{v} \in \mathbb{R}^{256}$, normalized under the $L_2$-norm:
+    \begin{equation}
+        \mathbf{v} \leftarrow \frac{\mathbf{v}}{\|\mathbf{v}\|_2}, \quad \|\mathbf{v}\|_2 = 1
+    \end{equation}
+\end{enumerate}
+
+\textbf{Encrypted Matching \& Hardware Key Protection.} The candidate embedding $\mathbf{v}$ is verified under TenSEAL's CKKS homomorphic encryption scheme ($N=8192, Q=[60,40,40,60], \Delta=2^{40}$). The secret key $\text{sk}$ is sealed inside the operating system keychain via Python \texttt{keyring} under service \texttt{who-speak.voice-he}. During verification, the Matcher API evaluates the homomorphic inner product $\llbracket s \rrbracket = \llbracket \mathbf{u} \rrbracket \odot \mathbf{v}$ over encrypted reference vector $\llbracket \mathbf{u} \rrbracket$. The client or agent decrypts $s = \text{Dec}_{\text{sk}}(\llbracket s \rrbracket)$. Verification succeeds if:
+\begin{equation}
+    s \ge \tau \approx 0.657 \quad (\text{configurable via } \texttt{VOICE\_SV\_THRESHOLD})
+\end{equation}
+
+\textbf{Audio Gate Isolation (\texttt{AuthRouterProcessor}).} As illustrated in Figure~\ref{fig:app-architecture}, biometric verification is decoupled from the conversational dataflow. \texttt{AuthRouterProcessor} sits ahead of VAD and STT. During biometric verification (\texttt{AuthChallengePhase.CAPTURING}), audio frames are intercepted and buffered exclusively for RawNet3 inference, while pausing conversational ingress. This ensures that the user's authentication is never processed by VAD, never transcribed into chat logs by Whisper, and never transmitted to the LLM.
+
+\textbf{Policy-Gated Tool Execution.} System capabilities are divided into public utilities and protected personal tools (e.g., \texttt{MockCalendarProvider} in \texttt{app/assistant/tools/calendar.py}). Privileged tool calls require $\text{AuthState} = \texttt{AUTHENTICATED}$. Invocations under unauthenticated states trigger an interactive voice challenge. Upon successful cryptographic verification ($s \ge \tau$), a session authorization TTL (default 5 minutes) is activated, permitting deterministic tool execution.
+
+\begin{warmbox}[title=Audio Gate Isolation Boundary]{Zero-Leakage Security Boundary}
+A critical security vulnerability in voice-driven assistants is ``passphrase leakage,'' where sensitive authentication speech is transcribed by ASR into dialogue history. Who-Speak-AI eliminates this via \texttt{AuthRouterProcessor}: challenge audio is intercepted at the WebRTC transport boundary before VAD or Whisper STT. Challenge frames are routed strictly to RawNet3 and CKKS matching, guaranteeing zero biometric or linguistic leakage into LLM contexts.
+\end{warmbox}
+
+\subsection{Privacy-Preserving Voice Authentication}\label{subsec:app-privacy}
 \subsubsection{CKKS Scheme Formulation}
 Who-Speak-AI implements the Cheon-Kim-Kim-Song (CKKS) cryptosystem \cite{cheon2017homomorphic} via the TenSEAL library \cite{tenseal2021}. CKKS supports homomorphic addition and multiplication on vectors of complex numbers, making it well-suited for fixed-dimensional continuous embedding spaces.
 
@@ -39,7 +152,7 @@ where $\odot$ denotes homomorphic plaintext-ciphertext slot-wise multiplication 
 \begin{equation}
     s = \text{Dec}_{\text{sk}}(\llbracket s \rrbracket)
 \end{equation}
-Verification succeeds if $s \ge \tau$, where $\tau = 0.584$ is the optimal operating threshold established during ViMD validation ($\text{FAR} \le 0.1\%$). At no point does the matcher observe $\mathbf{u}$, $\mathbf{v}$, or $s$.
+Verification succeeds if $s \ge \tau$, where $\tau \approx 0.657$ is the optimal operating threshold established during ViMD validation (\texttt{SV\_THRESHOLD = 0.6565317440180312}; configurable via \texttt{VOICE\_SV\_THRESHOLD}). At no point does the matcher observe $\mathbf{u}$, $\mathbf{v}$, or $s$.
 
 \begin{warmbox}[title=Homomorphic Zero-Trust Guarantee]{Cryptographic Protection Guarantee}
 Traditional systems require decrypting biometrics in server memory before evaluating distance metrics, creating a critical vulnerability window. Under Who-Speak-AI's CKKS architecture, the Matcher computes exclusively over encrypted ciphertexts. Even if the backend process is inspected or memory-dumped during verification, zero plaintext biometric data is accessible.
