@@ -105,16 +105,21 @@ class PipecatConversationProcessor(FrameProcessor):
             await self._interrupt_active_turn()
             await self.push_frame(frame, direction)
             return
-        if not self._conversation_ingress_allowed():
-            # AuthRouter is the first boundary, but frames already queued in
-            # VAD/STT may still arrive after a private-mode request. Drop
-            # those stale conversation frames as a second defense-in-depth
-            # boundary before they can create a transcript or tool call.
-            if isinstance(
-                frame,
-                (VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame, TranscriptionFrame, ErrorFrame),
-            ):
-                logger.debug("conversation_frame_dropped reason=auth_ingress_closed")
+        if not self._conversation_ingress_allowed() and isinstance(
+            frame,
+            (
+                VADUserStartedSpeakingFrame,
+                VADUserStoppedSpeakingFrame,
+                TranscriptionFrame,
+                ErrorFrame,
+            ),
+        ):
+            # AuthRouter is the first boundary, but VAD/STT frames already
+            # queued before a private-mode request can still arrive here.
+            # Drop only frames that could create a conversation turn. Pipeline
+            # lifecycle frames (especially StartFrame) must keep flowing: the
+            # output transport creates its TTS media sender on StartFrame.
+            logger.debug("conversation_frame_dropped reason=auth_ingress_closed")
             return
         if isinstance(frame, VADUserStartedSpeakingFrame):
             response_in_progress = (
@@ -151,6 +156,12 @@ class PipecatConversationProcessor(FrameProcessor):
             return
         if isinstance(frame, TranscriptionFrame):
             text = frame.text.strip()
+            logger.info(
+                "pipecat_transcription_received session_id=%s turn_id=%s text_chars=%s",
+                self._session_id,
+                self._active_turn or "-",
+                len(text),
+            )
             if not text:
                 self._mark_timing(self._active_turn, "error")
                 await self._send_state(VoiceAgentState.ERROR, turn_id=self._active_turn, stage="stt", message="No clear speech was detected. Please try again.")
@@ -168,6 +179,12 @@ class PipecatConversationProcessor(FrameProcessor):
             self._retryable[turn_id] = text
             await self._events.send_event(
                 "transcript", turn_id=turn_id, text=text, is_final=True
+            )
+            logger.info(
+                "pipecat_transcript_final session_id=%s turn_id=%s text_chars=%s",
+                self._session_id,
+                turn_id,
+                len(text),
             )
             self._response_task = self.create_task(
                 self._respond(turn_id, text), name=f"respond-{turn_id}"
@@ -204,12 +221,24 @@ class PipecatConversationProcessor(FrameProcessor):
                     for sentence in sentence_buffer.push(delta):
                         if self._tts_enabled:
                             self._mark_timing(turn_id, "tts_started")
+                            logger.info(
+                                "tts_sentence_enqueued session_id=%s turn_id=%s text_chars=%s",
+                                self._session_id,
+                                turn_id,
+                                len(sentence),
+                            )
                             await self.push_frame(
                                 VoiceTTSSpeakFrame(sentence, turn_id=turn_id)
                             )
             for sentence in sentence_buffer.flush():
                 if self._tts_enabled:
                     self._mark_timing(turn_id, "tts_started")
+                    logger.info(
+                        "tts_sentence_enqueued session_id=%s turn_id=%s text_chars=%s",
+                        self._session_id,
+                        turn_id,
+                        len(sentence),
+                    )
                     await self.push_frame(VoiceTTSSpeakFrame(sentence, turn_id=turn_id))
             response = "".join(response_parts).strip()
             if not response:
@@ -221,6 +250,13 @@ class PipecatConversationProcessor(FrameProcessor):
                 text=response,
                 is_final=True,
                 tool=tool_view,
+            )
+            logger.info(
+                "pipecat_assistant_final session_id=%s turn_id=%s text_chars=%s tool=%s",
+                self._session_id,
+                turn_id,
+                len(response),
+                tool_view["name"] if tool_view else "none",
             )
             if self._tts_enabled:
                 await self.push_frame(VoiceTTSTurnEndFrame(turn_id=turn_id))
@@ -293,8 +329,8 @@ class PipecatConversationProcessor(FrameProcessor):
             return None
         return {
             "name": "calendar.create_event" if "created" in tool_result else "calendar.list_events",
-            "provider": "mock",
-            "demo": True,
+            "provider": tool_result.get("provider", "mock"),
+            "demo": bool(tool_result.get("demo", False)),
         }
 
     async def cleanup(self):

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib.metadata
-import json
 import logging
 import time
 
@@ -15,7 +14,7 @@ from app.assistant.agents.conversation import ConversationSupervisor
 from app.assistant.config import LocalAgentSettings, OpenAISettings
 from app.assistant.contracts import AuthChallengeStatus, AuthDecision, AuthState
 from app.assistant.events import VoiceAgentSessionStatus, VoiceAgentState
-from app.assistant.events_bridge import SessionEventSink
+from app.assistant.events_bridge import SessionEventSink, parse_agent_command
 from app.assistant.pipecat_runtime.auth_router import AuthRouterProcessor
 from app.assistant.pipecat_runtime.conversation import PipecatConversationProcessor
 from app.assistant.pipecat_runtime.edge_tts_service import StreamingTTSPipecatService
@@ -25,7 +24,7 @@ from app.assistant.pipecat_runtime.stt import LocalWhisperSTTService
 from app.assistant.providers.tts_factory import build_tts_stack
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
 from app.assistant.providers.whisper_local import LocalWhisperProvider
-from app.assistant.tools.calendar import MockCalendarProvider
+from app.assistant.tools.calendar import GatewayCalendarProvider, MockCalendarProvider
 from app.assistant.voice_service import build_account_voice_auth_gate
 from app.assistant_gateway.main import GatewaySettings
 from app.assistant_gateway.store import GatewayStore
@@ -111,11 +110,27 @@ async def run_pipecat_session(
         ) from error
 
     gateway = GatewaySettings.from_environment()
-    if gateway.mcp_provider != "mock" or not gateway.mock_calendar_enabled:
-        raise RuntimeError("PIPECAT local mode requires MCP_PROVIDER=mock and MOCK_CALENDAR_ENABLED=true.")
-    store = GatewayStore(gateway.database_path)
-    store.initialize()
-    calendar = MockCalendarProvider(store)
+    if gateway.mcp_provider == "mock":
+        if not gateway.mock_calendar_enabled:
+            raise RuntimeError("Mock calendar is disabled.")
+        store = GatewayStore(gateway.database_path)
+        store.initialize()
+        calendar = MockCalendarProvider(store)
+        enabled_private_tools = {"calendar.list_events", "calendar.create_event"}
+    else:
+        if len(gateway.pipecat_supervisor_secret) < 32:
+            raise RuntimeError("PIPECAT_SUPERVISOR_SECRET must be at least 32 characters for MCP tool calls.")
+        calendar = GatewayCalendarProvider(
+            gateway_url=gateway.gateway_url,
+            session_id=descriptor.session_id,
+            room_name=descriptor.room_name,
+            internal_secret=gateway.pipecat_supervisor_secret,
+            account_id=descriptor.user_id,
+            timeout_seconds=gateway.google_mcp_timeout_seconds,
+        )
+        # Read-only rollout: create_event remains unavailable until the
+        # confirmation/idempotency flow has been implemented.
+        enabled_private_tools = {"calendar.list_events"}
     gate = await asyncio.to_thread(build_account_voice_auth_gate, descriptor.user_id)
     auth_controller = VoiceAuthChallengeController(
         gate=gate,
@@ -124,7 +139,7 @@ async def run_pipecat_session(
         capture_seconds=active.auth_challenge_seconds,
     )
 
-    from pipecat.frames.frames import InterruptionFrame
+    from pipecat.frames.frames import InterruptionFrame, StartFrame
 
     transport = LiveKitTransport(
         active.livekit_url,
@@ -150,6 +165,7 @@ async def run_pipecat_session(
         llm=OpenAIResponsesProvider(OpenAISettings.from_environment()),
         calendar=calendar,
         account_id=descriptor.user_id,
+        enabled_private_tools=enabled_private_tools,
     )
     room_id_hash = hashlib.sha256(descriptor.room_name.encode("utf-8")).hexdigest()[:16]
     conversation_processor: PipecatConversationProcessor
@@ -277,19 +293,27 @@ async def run_pipecat_session(
             params=SmartTurnParams(
                 stop_secs=active.vad_silence_seconds,
                 pre_speech_ms=active.smart_turn_pre_speech_ms,
-                max_duration_secs=min(active.vad_maximum_seconds, 8.0),
+                # Respect the application turn boundary. The former 8-second
+                # cap split a continuous, otherwise valid utterance even when
+                # VOICE_VAD_MAXIMUM_SECONDS allowed it to continue.
+                max_duration_secs=active.vad_maximum_seconds,
             ),
         ),
         max_wait_seconds=active.smart_turn_max_wait_seconds,
     )
     whisper_provider = LocalWhisperProvider(
-        model_name=active.whisper_model, device=active.whisper_device
+        model_name=active.whisper_model,
+        device=active.whisper_device,
+        compute_type=active.whisper_compute_type,
+        cpu_threads=active.whisper_cpu_threads if active.whisper_device == "cpu" else None,
     )
     logger.info(
-        "pipecat_local_model_warmup session_id=%s model=%s device=%s",
+        "pipecat_local_model_warmup session_id=%s model=%s device=%s compute_type=%s cpu_threads=%s",
         descriptor.session_id,
         active.whisper_model,
         active.whisper_device,
+        active.whisper_compute_type,
+        active.whisper_cpu_threads if active.whisper_device == "cpu" else None,
     )
     try:
         await asyncio.to_thread(whisper_provider.warmup)
@@ -340,7 +364,73 @@ async def run_pipecat_session(
         observers=[latency_observer],
         enable_rtvi=False,
         idle_timeout_secs=None,
+        setup_timeout_secs=active.pipeline_setup_timeout_seconds,
+        start_timeout_secs=active.pipeline_start_timeout_seconds,
     )
+
+    logger.info(
+        "pipecat_pipeline_timeouts session_id=%s setup_timeout_seconds=%s start_timeout_seconds=%s idle_timeout=None",
+        descriptor.session_id,
+        active.pipeline_setup_timeout_seconds,
+        active.pipeline_start_timeout_seconds,
+    )
+
+    @worker.event_handler("on_pipeline_started")
+    async def on_pipeline_started(_worker, _frame) -> None:
+        logger.info(
+            "pipecat_pipeline_started session_id=%s room_id_hash=%s",
+            descriptor.session_id,
+            room_id_hash,
+        )
+
+    @worker.event_handler("on_pipeline_timeout")
+    async def on_pipeline_timeout(_worker, frame) -> None:
+        logger.error(
+            "pipecat_pipeline_timeout session_id=%s frame=%s",
+            descriptor.session_id,
+            type(frame).__name__,
+        )
+        # PipelineWorker also emits this event when cancellation cannot drain
+        # in time. That is a shutdown problem, not a startup failure; exposing
+        # it as a startup error makes the browser enter a misleading retry loop.
+        if not isinstance(frame, StartFrame):
+            logger.warning(
+                "pipecat_pipeline_timeout_during_shutdown session_id=%s frame=%s",
+                descriptor.session_id,
+                type(frame).__name__,
+            )
+            return
+        await sink.send_event(
+            "session_status",
+            status=VoiceAgentSessionStatus.FAILED,
+            message="Local voice engine không phản hồi khi khởi động. Vui lòng thử lại.",
+        )
+
+    @worker.event_handler("on_setup_timeout")
+    async def on_setup_timeout(_worker) -> None:
+        logger.error("pipecat_pipeline_setup_timeout session_id=%s", descriptor.session_id)
+        await sink.send_event(
+            "session_status",
+            status=VoiceAgentSessionStatus.FAILED,
+            message="Local voice engine không hoàn tất khởi động. Vui lòng thử lại.",
+        )
+
+    @worker.event_handler("on_pipeline_error")
+    async def on_pipeline_error(_worker, frame) -> None:
+        logger.error(
+            "pipecat_pipeline_error session_id=%s processor=%s",
+            descriptor.session_id,
+            getattr(getattr(frame, "processor", None), "name", "unknown"),
+        )
+
+    @worker.event_handler("on_pipeline_finished")
+    async def on_pipeline_finished(_worker, frame) -> None:
+        logger.info(
+            "pipecat_pipeline_finished session_id=%s frame=%s",
+            descriptor.session_id,
+            type(frame).__name__,
+        )
+
     participant_joined = asyncio.Event()
     participant_status_announced = False
 
@@ -394,74 +484,110 @@ async def run_pipecat_session(
     async def on_data_received(_transport, data: bytes, participant_id: str | None) -> None:
         if participant_id != descriptor.participant_identity:
             return
-        try:
-            text = data.decode("utf-8").strip()
-        except UnicodeDecodeError:
+        parsed = parse_agent_command(data)
+        if parsed is None:
             return
-        action = text
-        payload = None
+        action, payload = parsed
+        logger.info(
+            "pipecat_auth_command_received session_id=%s action=%s",
+            descriptor.session_id,
+            action,
+        )
         try:
-            payload = json.loads(text)
-            if isinstance(payload, dict) and isinstance(payload.get("action"), str):
-                action = payload["action"]
-        except json.JSONDecodeError:
-            pass
-        if action in {"request_private_mode", "retry_voice"}:
-            if not auth_router.conversation_ready:
-                await sink.send_event(
-                    "state",
-                    state=VoiceAgentState.ERROR,
-                    stage="transport",
-                    message="Local voice engine chưa sẵn sàng nhận giọng nói.",
-                )
-                return
-            await auth_router.queue_frame(InterruptionFrame())
-            await sink.send_auth(
-                auth_router.request_private_mode(),
-                challenge=auth_router.challenge_status(),
-            )
-        elif action == "cancel_private_mode":
-            if not auth_router.conversation_ready:
-                return
-            await auth_router.queue_frame(InterruptionFrame())
-            await sink.send_auth(
-                auth_router.cancel_private_mode(),
-                challenge=auth_router.challenge_status(),
-            )
-        elif action in {"resume_conversation", "continue_as_guest"}:
-            if not auth_router.conversation_ready:
-                await sink.send_event(
-                    "state",
-                    state=VoiceAgentState.ERROR,
-                    stage="transport",
-                    message="Local voice engine chưa sẵn sàng nhận giọng nói.",
-                )
-                return
-            try:
+            if action in {"request_private_mode", "retry_voice"}:
+                if not auth_router.conversation_ready:
+                    await sink.send_event(
+                        "state",
+                        state=VoiceAgentState.ERROR,
+                        stage="transport",
+                        message="Local voice engine chưa sẵn sàng nhận giọng nói.",
+                    )
+                    return
+                # Change the ingress phase before queueing the interruption so
+                # audio arriving in this boundary cannot enter VAD/STT.
+                decision = auth_router.request_private_mode()
                 await auth_router.queue_frame(InterruptionFrame())
-                decision = auth_router.resume_conversation()
-            except RuntimeError:
-                await sink.send_event(
-                    "state",
-                    state=VoiceAgentState.ERROR,
-                    stage="auth",
-                    message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
+                await sink.send_auth(decision, challenge=auth_router.challenge_status())
+            elif action == "cancel_private_mode":
+                if not auth_router.conversation_ready:
+                    return
+                decision = auth_router.cancel_private_mode()
+                await auth_router.queue_frame(InterruptionFrame())
+                await sink.send_auth(decision, challenge=auth_router.challenge_status())
+            elif action in {"resume_conversation", "continue_as_guest"}:
+                if not auth_router.conversation_ready:
+                    await sink.send_event(
+                        "state",
+                        state=VoiceAgentState.ERROR,
+                        stage="transport",
+                        message="Local voice engine chưa sẵn sàng nhận giọng nói.",
+                    )
+                    return
+                try:
+                    # resume_conversation sets the short guard before the
+                    # interruption is queued, keeping challenge tail audio out.
+                    decision = auth_router.resume_conversation()
+                except RuntimeError:
+                    await sink.send_event(
+                        "state",
+                        state=VoiceAgentState.ERROR,
+                        stage="auth",
+                        message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
+                    )
+                    return
+                await auth_router.queue_frame(InterruptionFrame())
+                await sink.send_auth(decision, challenge=auth_router.challenge_status())
+            elif action == "retry" and isinstance(payload, dict) and isinstance(payload.get("turn_id"), str):
+                if auth_router.conversation_ingress_open:
+                    await conversation_processor.retry(payload["turn_id"])
+            else:
+                logger.debug(
+                    "pipecat_command_ignored session_id=%s action=%s",
+                    descriptor.session_id,
+                    action,
                 )
                 return
-            await sink.send_auth(
-                decision,
-                challenge=auth_router.challenge_status(),
+            logger.info(
+                "pipecat_auth_command_applied session_id=%s action=%s phase=%s",
+                descriptor.session_id,
+                action,
+                auth_router.challenge_status().phase.value,
             )
-        elif action == "retry" and isinstance(payload, dict) and isinstance(payload.get("turn_id"), str):
-            if auth_router.conversation_ingress_open:
-                await conversation_processor.retry(payload["turn_id"])
+        except Exception:
+            logger.exception(
+                "pipecat_auth_command_failed session_id=%s action=%s",
+                descriptor.session_id,
+                action,
+            )
+            await sink.send_event(
+                "state",
+                state=VoiceAgentState.ERROR,
+                stage="auth",
+                message="Không thể cập nhật trạng thái voice. Vui lòng thử lại.",
+            )
 
     @transport.event_handler("on_participant_disconnected")
     async def on_participant_disconnected(_transport, participant_id: str) -> None:
         if participant_id == descriptor.participant_identity:
+            logger.info(
+                "pipecat_browser_disconnected room_event=browser_disconnected connection_state=disconnected disconnect_reason=participant_left session_id=%s room_id_hash=%s phase=%s",
+                descriptor.session_id,
+                room_id_hash,
+                auth_router.challenge_status().phase.value,
+            )
             # A reconnect receives a new descriptor and a new AuthSession; this
             # worker never keeps an authenticated state after disconnect.
             await runner.cancel()
+
+    @transport.event_handler("on_disconnected")
+    async def on_transport_disconnected(_transport) -> None:
+        logger.warning(
+            "pipecat_transport_disconnected room_event=transport_disconnected connection_state=disconnected disconnect_reason=transport_event session_id=%s room_id_hash=%s phase=%s auth_state=%s",
+            descriptor.session_id,
+            room_id_hash,
+            auth_router.challenge_status().phase.value,
+            auth_router.auth_state.state.value,
+        )
 
     join_watchdog: asyncio.Task | None = None
 

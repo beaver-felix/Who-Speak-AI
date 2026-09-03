@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import secrets
 
 
@@ -42,3 +43,20 @@ def new_session_token() -> str:
 
 def digest_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def sign_internal_request(payload: dict[str, object], secret: str) -> str:
+    """Sign an Agent-to-gateway request without putting a user id in trust."""
+    key = secret.encode("utf-8")
+    if len(key) < 32:
+        raise ValueError("PIPECAT_SUPERVISOR_SECRET must be at least 32 characters.")
+    message = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def verify_internal_request(payload: dict[str, object], supplied_signature: str, secret: str) -> bool:
+    try:
+        expected = sign_internal_request(payload, secret)
+    except ValueError:
+        return False
+    return hmac.compare_digest(expected, supplied_signature)

@@ -49,6 +49,32 @@ def test_failed_voice_verification_returns_to_guest() -> None:
     assert decision is not None and decision.state is AuthState.GUEST
 
 
+def test_failed_voice_verification_requires_an_explicit_guest_or_retry_action() -> None:
+    controller = VoiceAuthChallengeController(
+        gate=Gate(matched=False), target_identity_id="owner", session=AuthSession(ttl=timedelta(minutes=5))
+    )
+    controller.request_private_mode()
+
+    decision = controller.append_pcm(np.ones(48_000 * 5, dtype=np.float32), sample_rate=48_000)
+
+    assert decision is not None and decision.state is AuthState.GUEST
+    assert controller.phase is AuthChallengePhase.WAITING_FOR_RESUME
+    assert controller.challenge_status().can_resume is True
+
+    # Audio after a failed challenge is still isolated until the user chooses
+    # what should happen next; it must not silently enter the Agent.
+    assert controller.append_pcm(np.ones(48_000, dtype=np.float32), sample_rate=48_000) is None
+
+    resumed = controller.resume_conversation()
+    assert resumed.state is AuthState.GUEST
+    assert controller.phase is AuthChallengePhase.CONVERSATION_READY
+
+    # Retrying starts a fresh challenge and is also an explicit transition.
+    retry = controller.request_private_mode()
+    assert retry.state is AuthState.AUTH_PENDING
+    assert controller.phase is AuthChallengePhase.CAPTURING
+
+
 def test_terminal_frame_is_clamped_and_result_waits_for_explicit_resume() -> None:
     class InspectingGate(Gate):
         def __init__(self) -> None:

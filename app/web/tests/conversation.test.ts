@@ -43,17 +43,31 @@ describe('voice conversation reducer', () => {
     expect(reduceConversation(withError, { type: 'clear_notice' }).notice).toBeNull()
   })
 
-  it('replaces listening and thinking placeholders in their original turn', () => {
+  it('shows an Agent thinking placeholder, then replaces it with streamed text', () => {
     const listening = parseVoiceAgentEvent('{"type":"state","message_id":"m1","turn_id":"t1","state":"listening","sequence":1}')!
     const transcript = parseVoiceAgentEvent('{"type":"transcript","message_id":"m2","turn_id":"t1","text":"Xin chào","is_final":true,"sequence":2}')!
     const thinking = parseVoiceAgentEvent('{"type":"state","message_id":"m3","turn_id":"t1","state":"thinking","sequence":3}')!
-    const response = parseVoiceAgentEvent('{"type":"assistant_response","message_id":"m4","turn_id":"t1","text":"Chào bạn!","is_final":true,"sequence":4}')!
-    const state = [listening, transcript, thinking, response].reduce(reduceConversation, initialConversationState)
+    const streamed = parseVoiceAgentEvent('{"type":"assistant_response","message_id":"m4","turn_id":"t1","text":"Chào bạn","is_final":false,"sequence":4}')!
+    const final = parseVoiceAgentEvent('{"type":"assistant_response","message_id":"m5","turn_id":"t1","text":"Chào bạn!","is_final":true,"sequence":5}')!
+    const waiting = [listening, transcript, thinking].reduce(reduceConversation, initialConversationState)
+    const state = [streamed, final].reduce(reduceConversation, waiting)
+
+    expect(waiting.messages.map((message) => [message.role, message.text, message.provisional])).toEqual([
+      ['user', 'Xin chào', false], ['assistant', 'Thinking…', true],
+    ])
 
     expect(state.messages.map((message) => [message.role, message.text, message.provisional])).toEqual([
       ['user', 'Xin chào', false],
       ['assistant', 'Chào bạn!', false],
     ])
+  })
+
+  it('never renders a transcribing state as a user transcript', () => {
+    const stateEvent = parseVoiceAgentEvent('{"type":"state","message_id":"state-1","turn_id":"t1","state":"transcribing","sequence":1}')!
+    const state = reduceConversation(initialConversationState, stateEvent)
+
+    expect(state.messages).toHaveLength(0)
+    expect(state.turnStates.t1.state).toBe('transcribing')
   })
 
   it('drops an older event sequence instead of regressing the visible turn', () => {

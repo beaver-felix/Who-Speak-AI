@@ -88,6 +88,17 @@ Edit `.env.local` with your secrets:
 - `VOICE_MATCHER_TOKEN` — shared secret for the Matcher API (min 8 characters)
 - `PIPECAT_SUPERVISOR_SECRET` — required in Pipecat mode (min 32 characters)
 
+Google Calendar is disabled by default. Keep `MCP_PROVIDER=mock` for the local
+demo. To test the read-only remote Calendar MCP integration, configure a Web
+application OAuth client and add the callback URI
+`http://127.0.0.1:8020/api/integrations/google-calendar/callback` in Google
+Cloud, then set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and a
+32-byte URL-safe `GOOGLE_TOKEN_ENCRYPTION_KEY`. Finally set
+`MCP_PROVIDER=mcp`. Tokens remain encrypted in the gateway SQLite database;
+they are never sent to the browser, LiveKit, or OpenAI. The remote Calendar
+MCP endpoint is a Google Workspace Developer Preview, so use a dedicated test
+account and return to `MCP_PROVIDER=mock` if it is unavailable.
+
 ### 3. Start the services
 
 Open five terminals:
@@ -112,6 +123,13 @@ cd app/web && npm install && npm run dev
 ### 4. Use it
 
 Open **http://127.0.0.1:5173**, register an account, enroll your voice (three samples), and start talking to the assistant.
+
+When the gateway is configured with `MCP_PROVIDER=mcp`, open the Google
+Calendar card in the workspace and connect the Google account whose verified
+email exactly matches the Who Speak account. Voice authentication is still
+required before the Agent can read personal events. The MVP exposes only
+`calendar.list_events`; event creation is intentionally disabled until its
+confirmation and idempotency flow is implemented.
 
 ---
 

@@ -55,3 +55,5 @@ def test_openai_payload_contains_transcript_and_capability_not_sensitive_voice_d
     serialized = repr(responses.kwargs)
     assert "embedding" not in serialized
     assert "audio" not in serialized
+    assert "Trusted VoiceAuth state for this request: guest" in responses.kwargs["instructions"]
+    assert "Private Calendar access: not granted" in responses.kwargs["instructions"]

@@ -105,7 +105,17 @@ class PipecatSessionSupervisor:
                 return
             error = done.exception()
             if error:
-                logger.error("pipecat_session_failed session_id=%s: %s", descriptor.session_id, error)
+                logger.error(
+                    "pipecat_session_failed session_id=%s: %s",
+                    descriptor.session_id,
+                    error,
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+            else:
+                logger.warning(
+                    "pipecat_session_finished_without_error session_id=%s",
+                    descriptor.session_id,
+                )
 
         task.add_done_callback(finished)
         logger.info(
@@ -158,12 +168,21 @@ def create_supervisor_app(settings: PipecatSupervisorSettings | None = None) -> 
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="OPENAI_API_KEY is required before starting the conversational Pipecat runtime.",
             )
-        if os.getenv("MCP_PROVIDER", "mock").strip().lower() != "mock" or os.getenv(
-            "MOCK_CALENDAR_ENABLED", "true"
-        ).strip().lower() not in {"1", "true", "yes", "on"}:
+        provider = os.getenv("MCP_PROVIDER", "mock").strip().lower()
+        if provider not in {"mock", "mcp", "local"}:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Pipecat local mode requires MCP_PROVIDER=mock and MOCK_CALENDAR_ENABLED=true.",
+                detail="MCP_PROVIDER must be either mock, mcp, or local.",
+            )
+        if provider == "mock" and os.getenv("MOCK_CALENDAR_ENABLED", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Mock calendar is disabled.",
+            )
+        if provider in {"mcp", "local"} and len(os.getenv("PIPECAT_SUPERVISOR_SECRET", "").strip()) < 32:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PIPECAT_SUPERVISOR_SECRET is required for MCP tool calls.",
             )
         descriptor = await supervisor.start(payload.descriptor)
         return {"session_id": descriptor.session_id, "status": "starting"}

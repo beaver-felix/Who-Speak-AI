@@ -21,9 +21,24 @@ class PolicyToolExecutor:
     verification identifier from becoming a storage namespace.
     """
 
-    def __init__(self, calendar: CalendarProvider | None, *, account_id: str | None) -> None:
+    def __init__(
+        self,
+        calendar: CalendarProvider | None,
+        *,
+        account_id: str | None,
+        enabled_private_tools: set[str] | frozenset[str] | None = None,
+    ) -> None:
         self._calendar = calendar
         self._account_id = account_id.strip() if account_id else None
+        self._enabled_private_tools = set(enabled_private_tools or SupervisorPolicy.PRIVATE_TOOLS)
+
+    def allowed_tools(self, auth: AuthDecision) -> set[str]:
+        """Return the app-owned capability surface, never MCP server tools."""
+        return SupervisorPolicy.allowed_tool_names(
+            auth,
+            public_tools=set(SupervisorPolicy.PUBLIC_TOOLS),
+            private_tools=self._enabled_private_tools,
+        )
 
     async def list_events(self, *, auth: AuthDecision, start: datetime, end: datetime) -> dict:
         account_id = self._authorize("calendar.list_events", auth)
@@ -44,7 +59,7 @@ class PolicyToolExecutor:
         )
 
     def _authorize(self, name: str, auth: AuthDecision) -> str:
-        if name not in SupervisorPolicy.for_auth(auth) or not auth.may_use_private_tools:
+        if name not in self.allowed_tools(auth) or not auth.may_use_private_tools:
             raise ToolAuthorizationError(f"Tool {name} is not available in the current auth state.")
         if self._calendar is None or not self._account_id:
             raise RuntimeError("A trusted account context is required for calendar access.")
@@ -52,7 +67,11 @@ class PolicyToolExecutor:
 
     async def _execute_calendar(self, name: str, *, auth: AuthDecision, operation) -> dict:
         result = await operation()
-        if result.provider != "mock" or result.demo is not True or result.user_id != self._account_id:
+        safe_provider = result.provider in {"mock", "google_mcp"}
+        safe_marker = (result.provider == "mock" and result.demo is True) or (
+            result.provider == "google_mcp" and result.demo is False
+        )
+        if not safe_provider or not safe_marker or result.user_id != self._account_id:
             raise RuntimeError("Calendar provider returned an unsafe result.")
         payload: dict = {"provider": result.provider, "demo": result.demo}
         if name == "calendar.create_event":

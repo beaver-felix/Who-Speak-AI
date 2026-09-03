@@ -7,8 +7,16 @@ import logging
 from collections.abc import AsyncGenerator
 
 import numpy as np
-from pipecat.frames.frames import ErrorFrame, Frame, TranscriptionFrame
+from pipecat.frames.frames import (
+    AudioRawFrame,
+    ErrorFrame,
+    Frame,
+    TranscriptionFrame,
+    VADUserStoppedSpeakingFrame,
+)
+from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.stt_service import SegmentedSTTService
+from pipecat.services.settings import STTSettings
 from pipecat.transcriptions.language import Language
 from pipecat.utils.time import time_now_iso8601
 
@@ -28,9 +36,31 @@ class LocalWhisperSTTService(SegmentedSTTService):
         sample_rate: int = 16_000,
         language: str = "vi",
     ) -> None:
-        super().__init__(sample_rate=sample_rate, audio_passthrough=False)
+        # Pipecat 1.8.x validates service settings at StartFrame.  A local
+        # adapter still needs to provide concrete values even though the
+        # actual model is owned by faster-whisper rather than Pipecat.
+        super().__init__(
+            sample_rate=sample_rate,
+            audio_passthrough=False,
+            settings=STTSettings(
+                model="local-faster-whisper",
+                language=language,
+            ),
+        )
         self._provider = provider
         self._language = language
+
+    @property
+    def supports_ttfs(self) -> bool:
+        """Tell Pipecat that this adapter has no extra server-side TTFS wait.
+
+        Turn completion is owned by the upstream Silero VAD + Smart Turn
+        processors. Advertising the default STT P99 here would make Pipecat
+        assume an additional one-second wait and would also produce a noisy
+        startup warning.
+        """
+
+        return False
 
     @property
     def wants_wav_segments(self) -> bool:
@@ -38,9 +68,38 @@ class LocalWhisperSTTService(SegmentedSTTService):
         # header. SegmentedSTTService therefore gives us raw signed-16 PCM.
         return False
 
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        """Keep the segment buffer populated with Pipecat 1.8.x.
+
+        Pipecat 1.8.1's ``SegmentedSTTService.process_frame`` handles the VAD
+        boundary frames but does not dispatch ``AudioRawFrame`` to its own
+        ``process_audio_frame`` hook. A segmented adapter then receives an
+        empty buffer when the stop frame arrives: VAD reports completion, but
+        Whisper (and therefore the LLM/TTS stages) never run.
+
+        ``SegmentedSTTService`` delegates ordinary frame forwarding to
+        ``STTService``. Keep that framework behavior intact and fill only the
+        raw-PCM buffer explicitly. This is version-scoped and covered by a
+        regression test so it can be removed after a compatible Pipecat
+        upgrade.
+        """
+        await super().process_frame(frame, direction)
+        if isinstance(frame, AudioRawFrame):
+            await self.process_audio_frame(frame, direction)
+
+    async def _handle_user_stopped_speaking(self, frame: VADUserStoppedSpeakingFrame):
+        """Expose the segment boundary and buffer size without audio data."""
+        logger.info(
+            "local_whisper_segment_ready audio_bytes=%s sample_rate=%s",
+            len(self._audio_buffer),
+            self.sample_rate,
+        )
+        await super()._handle_user_stopped_speaking(frame)
+
     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame | None, None]:
         if not audio:
             return
+        logger.info("local_whisper_started audio_bytes=%s", len(audio))
         try:
             samples = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
             sample_rate = self.sample_rate or self._init_sample_rate or 16_000
@@ -62,6 +121,11 @@ class LocalWhisperSTTService(SegmentedSTTService):
             )
             return
         if text.strip():
+            logger.info(
+                "local_whisper_final audio_bytes=%s text_chars=%s",
+                len(audio),
+                len(text.strip()),
+            )
             yield TranscriptionFrame(
                 text=text.strip(),
                 user_id=self._user_id,
@@ -69,3 +133,5 @@ class LocalWhisperSTTService(SegmentedSTTService):
                 language=Language.VI,
                 finalized=True,
             )
+        else:
+            logger.info("local_whisper_empty audio_bytes=%s", len(audio))

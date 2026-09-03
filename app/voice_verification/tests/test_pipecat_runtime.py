@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import sys
+import types
 from datetime import timedelta
 
 import numpy as np
@@ -13,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.assistant.contracts import AuthDecision, AuthState
 from app.assistant.auth_controller import VoiceAuthChallengeController
 from app.assistant.auth_session import AuthSession
-from app.assistant.events_bridge import SessionEventSink
+from app.assistant.events_bridge import SessionEventSink, parse_agent_command
 from app.assistant.pipecat_runtime.auth_router import AuthRouterProcessor
 from app.assistant.pipecat_runtime.conversation import PipecatConversationProcessor
 from app.assistant.pipecat_runtime.runtime import cancel_if_participant_absent
@@ -25,11 +27,13 @@ from app.assistant.pipecat_runtime.session import (
 )
 from app.assistant.pipecat_runtime.smart_turn import SmartTurnGateProcessor
 from app.assistant.pipecat_runtime.stt import LocalWhisperSTTService
+from app.assistant.providers.whisper_local import LocalWhisperProvider
 from app.assistant_gateway.main import GatewaySettings, create_app
 from app.assistant_gateway.store import VoiceProfile
 from pipecat.audio.turn.base_turn_analyzer import EndOfTurnState
 from pipecat.frames.frames import (
     InputAudioRawFrame,
+    StartFrame,
     TranscriptionFrame,
     UserAudioRawFrame,
     VADUserStartedSpeakingFrame,
@@ -39,6 +43,21 @@ from pipecat.processors.frame_processor import FrameDirection
 from pipecat.utils.asyncio.task_manager import TaskManager
 from pipecat.utils.base_object import BaseObject
 from voiceauth.matching import VerificationResult
+
+
+def test_agent_command_parser_accepts_json_and_legacy_wire_formats() -> None:
+    assert parse_agent_command(b'retry_voice') == ("retry_voice", None)
+    assert parse_agent_command(b'{"action":"continue_as_guest"}') == (
+        "continue_as_guest",
+        {"action": "continue_as_guest"},
+    )
+    assert parse_agent_command('{"action":"retry","turn_id":"turn-1"}') == (
+        "retry",
+        {"action": "retry", "turn_id": "turn-1"},
+    )
+    assert parse_agent_command(b'{"action":"   "}') is None
+    assert parse_agent_command(b'"continue_as_guest"') is None
+    assert parse_agent_command(b"\xff") is None
 
 
 def descriptor() -> PipecatSessionDescriptor:
@@ -462,6 +481,35 @@ def test_conversation_processor_drops_queued_transcription_when_auth_ingress_is_
     assert emitted == []
 
 
+def test_conversation_processor_forwards_start_frame_while_auth_ingress_is_closed() -> None:
+    emitted: list[object] = []
+
+    async def send(_message, _participant):
+        pass
+
+    processor = PipecatConversationProcessor(
+        supervisor=object(),
+        auth=lambda: AuthDecision(AuthState.GUEST),
+        events=SessionEventSink(send, "web-1"),
+        tts_enabled=True,
+        conversation_ingress_allowed=lambda: False,
+    )
+
+    async def capture(frame, _direction=FrameDirection.DOWNSTREAM):
+        emitted.append(frame)
+
+    async def exercise() -> None:
+        await BaseObject.setup(processor, TaskManager())
+        processor.push_frame = capture  # type: ignore[method-assign]
+        await processor.process_frame(StartFrame(), FrameDirection.DOWNSTREAM)
+        await processor.cleanup()
+
+    asyncio.run(exercise())
+
+    assert len(emitted) == 1
+    assert isinstance(emitted[0], StartFrame)
+
+
 def test_local_whisper_adapter_emits_final_transcript_without_mlx_import() -> None:
     class Provider:
         def transcribe(self, recording, *, language):
@@ -479,6 +527,84 @@ def test_local_whisper_adapter_emits_final_transcript_without_mlx_import() -> No
     assert isinstance(frames[0], TranscriptionFrame)
     assert frames[0].text == "xin chào"
     assert frames[0].finalized is True
+
+
+def test_local_whisper_provider_forwards_cpu_quantization_settings(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeWhisperModel:
+        def __init__(self, model_name, **kwargs):
+            captured["model_name"] = model_name
+            captured.update(kwargs)
+
+    fake_module = types.ModuleType("faster_whisper")
+    fake_module.WhisperModel = FakeWhisperModel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+
+    provider = LocalWhisperProvider(
+        model_name="vudang449/PhoWhisper-small-ct2",
+        device="cpu",
+        compute_type="int8",
+        cpu_threads=4,
+    )
+    provider.warmup()
+
+    assert captured == {
+        "model_name": "vudang449/PhoWhisper-small-ct2",
+        "device": "cpu",
+        "compute_type": "int8",
+        "cpu_threads": 4,
+    }
+
+
+def test_local_whisper_adapter_initializes_pipecat_stt_settings() -> None:
+    service = LocalWhisperSTTService(object())
+
+    assert service._settings.model == "local-faster-whisper"
+    assert service._settings.language == "vi"
+    assert service.supports_ttfs is False
+    assert service.service_metadata_frame().ttfs_p99_latency == 0.0
+
+
+def test_local_whisper_segmented_adapter_buffers_audio_before_vad_stop() -> None:
+    class Provider:
+        def transcribe(self, recording, *, language):
+            assert recording.waveform.size == 640
+            assert recording.sample_rate == 16_000
+            assert language == "vi"
+            return "xin chào"
+
+    service = LocalWhisperSTTService(Provider())
+    emitted: list[object] = []
+
+    async def exercise() -> None:
+        await BaseObject.setup(service, TaskManager())
+
+        async def capture(frame, _direction=FrameDirection.DOWNSTREAM):
+            emitted.append(frame)
+
+        service.push_frame = capture  # type: ignore[method-assign]
+        await service.process_frame(
+            VADUserStartedSpeakingFrame(0.384), FrameDirection.DOWNSTREAM
+        )
+        await service.process_frame(
+            UserAudioRawFrame(
+                audio=np.zeros(320, dtype=np.int16).tobytes(),
+                sample_rate=16_000,
+                num_channels=1,
+                user_id="web-1",
+            ),
+            FrameDirection.DOWNSTREAM,
+        )
+        await service.process_frame(
+            VADUserStoppedSpeakingFrame(0.2), FrameDirection.DOWNSTREAM
+        )
+        await service.cleanup()
+
+    asyncio.run(exercise())
+    assert any(isinstance(frame, TranscriptionFrame) for frame in emitted)
+
+
 
 
 def test_browser_event_sink_contains_no_voice_private_material() -> None:

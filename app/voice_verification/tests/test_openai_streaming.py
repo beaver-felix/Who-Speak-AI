@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 from app.assistant.config import OpenAISettings
+from app.assistant.contracts import AuthDecision, AuthState
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
 
 
@@ -49,17 +50,16 @@ def test_openai_provider_yields_only_visible_text_deltas_and_keeps_store_disable
         return [
             chunk
             async for chunk in provider.respond_stream(
-                "Xin chào", allowed_tools={"general_qa"}, auth_context=None
+                "Xin chào", allowed_tools={"general_qa"}, auth_context=AuthDecision(AuthState.GUEST)
             )
         ]
 
     assert asyncio.run(collect()) == ["Xin ", "chào"]
-    assert client.responses.calls == [
-        {
-            "model": "test-model",
-            "instructions": "You are a helpful voice assistant. Keep answers concise and natural when spoken. Follow the capability policy. Capabilities available for this request: general_qa.",
-            "input": "Xin chào",
-            "store": False,
-            "stream": True,
-        }
-    ]
+    assert len(client.responses.calls) == 1
+    request = client.responses.calls[0]
+    assert request["model"] == "test-model"
+    assert request["input"] == "Xin chào"
+    assert request["store"] is False
+    assert request["stream"] is True
+    assert "Trusted VoiceAuth state for this request: guest" in request["instructions"]
+    assert "Private Calendar access: not granted" in request["instructions"]

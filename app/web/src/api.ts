@@ -4,6 +4,19 @@
 const gateway = import.meta.env.VITE_GATEWAY_URL ?? ''
 
 export type CurrentUser = { id: string; email: string; display_name: string; voice_enrolled: boolean }
+export type GoogleCalendarStatus = {
+  provider: 'google_mcp'
+  configured: boolean
+  connected: boolean
+  status: 'not_connected' | 'active' | 'needs_reconnect' | string
+  email?: string
+}
+export type AgentCapabilities = {
+  user_id: string
+  mcp_provider: 'mock' | 'mcp' | 'local'
+  mock_calendar: boolean
+  google_calendar: GoogleCalendarStatus
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${gateway}${path}`, {
@@ -32,4 +45,8 @@ export const api = {
     agent_identity: string
     runtime: 'livekit' | 'pipecat'
   }>('/api/livekit/token', { method: 'POST' }),
+  capabilities: () => request<AgentCapabilities>('/api/agent/capabilities'),
+  googleCalendarStatus: () => request<GoogleCalendarStatus>('/api/integrations/google-calendar/status'),
+  googleCalendarStartUrl: () => `${gateway}/api/integrations/google-calendar/start`,
+  disconnectGoogleCalendar: () => request<void>('/api/integrations/google-calendar/disconnect', { method: 'POST' }),
 }

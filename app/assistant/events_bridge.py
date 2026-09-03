@@ -5,9 +5,40 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from app.assistant.contracts import AuthChallengePhase, AuthChallengeStatus, AuthDecision
 from app.assistant.events import event_payload
+
+
+def parse_agent_command(data: bytes | str) -> tuple[str, dict[str, Any] | None] | None:
+    """Parse an auth/agent command from either the current or legacy wire format.
+
+    The web client sends an object envelope so the command is unambiguous when
+    a LiveKit room has more than one data consumer.  Accepting the old plain
+    string here keeps already-running legacy workers compatible during a local
+    restart/upgrade.
+    """
+
+    try:
+        text = data.decode("utf-8").strip() if isinstance(data, bytes) else data.strip()
+    except UnicodeDecodeError:
+        return None
+    if not text:
+        return None
+
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError:
+        # Backward-compatible format: request_private_mode, retry_voice, ...
+        return text, None
+
+    if not isinstance(decoded, dict):
+        return None
+    action = decoded.get("action")
+    if not isinstance(action, str) or not action.strip():
+        return None
+    return action.strip(), decoded
 
 
 def auth_status_payload(

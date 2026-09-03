@@ -113,6 +113,7 @@ p { max-width: 66ch; color: var(--muted); text-wrap: pretty; }
 .connection-chip { color: var(--muted); background: var(--surface-raised); }
 .connection-chip.connected { color: #003a2e; background: var(--accent); }
 .connection-chip.connecting, .connection-chip.reconnecting { color: #553900; background: var(--warning); }
+.connection-chip.failed { color: #4a151b; background: var(--danger); }
 .chat-thread { min-height: 0; overflow: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 1.5rem; padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); scrollbar-gutter: stable; scroll-behavior: smooth; }
 .chat-content { min-height: 100%; min-width: 0; }
 .session-status-card { display: flex; align-items: flex-start; gap: .8rem; max-width: 56rem; margin: 0 auto 1.25rem; padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface-soft); }

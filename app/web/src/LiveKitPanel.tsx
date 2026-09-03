@@ -22,6 +22,7 @@ export function LiveKitPanel() {
       levels={levels}
       microphoneEnabled={session.microphoneEnabled}
       audioPlayback={session.audioPlayback}
+      authCommandPending={session.authCommandPending}
       conversationCount={session.conversation.messages.length}
       error={session.error}
       onJoin={() => void session.join()}
@@ -32,6 +33,7 @@ export function LiveKitPanel() {
       onResumeConversation={() => void session.sendAuthCommand(RESUME_CONVERSATION)}
       onContinueAsGuest={() => void session.sendAuthCommand(CONTINUE_AS_GUEST)}
       onRetryVoice={() => void session.sendAuthCommand(RETRY_VOICE)}
+      onRetrySession={() => void session.retrySession()}
       onEnableAudio={() => void session.enableAudio()}
       onOpenConversation={() => setMobileConversationOpen(true)}
     />

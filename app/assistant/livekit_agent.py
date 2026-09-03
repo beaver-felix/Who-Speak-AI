@@ -20,13 +20,13 @@ from app.assistant.agents.conversation import ConversationSupervisor
 from app.assistant.config import LocalAgentSettings
 from app.assistant.contracts import AuthChallengePhase, AuthDecision, AuthState
 from app.assistant.events import VoiceAgentState, event_payload
-from app.assistant.events_bridge import auth_status_payload
+from app.assistant.events_bridge import auth_status_payload, parse_agent_command
 from app.assistant.livekit_tts import publish_mp3
 from app.assistant.providers.edge_tts_local import EdgeTTSProvider
 from app.assistant.providers.openai_llm import OpenAIResponsesProvider
 from app.assistant.providers.whisper_local import LocalWhisperProvider
 from app.assistant.streaming import SentenceBuffer
-from app.assistant.tools.calendar import MockCalendarProvider
+from app.assistant.tools.calendar import GatewayCalendarProvider, MockCalendarProvider
 from app.assistant.turn_controller import ConversationTurnController
 from app.assistant.voice_service import build_account_voice_auth_gate, build_persistent_voice_auth_gate
 from app.assistant_gateway.main import GatewaySettings
@@ -72,6 +72,15 @@ def _voice_target_from_dispatch(metadata: str, *, legacy_owner_id: str | None) -
     raise ValueError("Room has no enrolled voice target. Enroll voice before joining the assistant.")
 
 
+def _session_id_from_dispatch(metadata: str, *, fallback: str) -> str:
+    try:
+        payload = json.loads(metadata) if metadata else {}
+    except json.JSONDecodeError:
+        return fallback
+    value = payload.get("session_id") if isinstance(payload, dict) else None
+    return value if isinstance(value, str) and value.strip() else fallback
+
+
 async def accept_auth_gate_job(request) -> None:
     """Give the browser a stable identity for trusted status messages."""
     await request.accept(name="Voice Auth Gate", identity=AGENT_PARTICIPANT_IDENTITY)
@@ -90,6 +99,7 @@ async def auth_gate_entrypoint(ctx) -> None:
         ctx.job.metadata,
         legacy_owner_id=str(settings.owner_identity_id) if settings.owner_identity_id else None,
     )
+    dispatch_session_id = _session_id_from_dispatch(ctx.job.metadata, fallback=str(ctx.room.name))
     # Model load, HE private context access, and matcher registration occur
     # only in this local Agent process. They are absent from LiveKit data.
     if account_id:
@@ -116,16 +126,34 @@ async def auth_gate_entrypoint(ctx) -> None:
         # Provider construction is trusted/local. Whisper's model remains lazy
         # and audio is never passed to OpenAI; only the resulting transcript is.
         gateway_settings = GatewaySettings.from_environment()
-        if gateway_settings.mcp_provider != "mock" or not gateway_settings.mock_calendar_enabled:
-            raise RuntimeError("Only MCP_PROVIDER=mock is supported by the local Agent phase.")
-        store = GatewayStore(gateway_settings.database_path)
-        store.initialize()
         from app.assistant.config import OpenAISettings
 
+        if gateway_settings.mcp_provider == "mock":
+            if not gateway_settings.mock_calendar_enabled:
+                raise RuntimeError("Mock calendar is disabled.")
+            store = GatewayStore(gateway_settings.database_path)
+            store.initialize()
+            calendar = MockCalendarProvider(store)
+            enabled_private_tools = {"calendar.list_events", "calendar.create_event"}
+        else:
+            if not account_id:
+                raise RuntimeError("A gateway account context is required for Google Calendar MCP.")
+            if len(gateway_settings.pipecat_supervisor_secret) < 32:
+                raise RuntimeError("PIPECAT_SUPERVISOR_SECRET must be at least 32 characters for MCP tool calls.")
+            calendar = GatewayCalendarProvider(
+                gateway_url=gateway_settings.gateway_url,
+                session_id=dispatch_session_id,
+                room_name=str(ctx.room.name),
+                internal_secret=gateway_settings.pipecat_supervisor_secret,
+                account_id=account_id,
+                timeout_seconds=gateway_settings.google_mcp_timeout_seconds,
+            )
+            enabled_private_tools = {"calendar.list_events"}
         conversation = ConversationSupervisor(
             llm=OpenAIResponsesProvider(OpenAISettings.from_environment()),
-            calendar=MockCalendarProvider(store),
+            calendar=calendar,
             account_id=account_id,
+            enabled_private_tools=enabled_private_tools,
         )
         transcriber = LocalWhisperProvider(model_name=settings.whisper_model, device=settings.whisper_device)
         tts = EdgeTTSProvider(voice=settings.edge_tts_voice)
@@ -442,14 +470,12 @@ async def auth_gate_entrypoint(ctx) -> None:
     def on_data_received(packet: rtc.DataPacket) -> None:
         if packet.participant is None:
             return
-        try:
-            command = packet.data.decode("utf-8")
-        except UnicodeDecodeError:
+        parsed = parse_agent_command(packet.data)
+        if parsed is None:
             return
+        command, payload = parsed
         if packet.topic == AGENT_COMMAND_TOPIC:
-            try:
-                payload = json.loads(command)
-            except json.JSONDecodeError:
+            if payload is None:
                 return
             turn_id = payload.get("turn_id")
             if payload.get("action") != "retry" or not isinstance(turn_id, str):
@@ -469,42 +495,63 @@ async def auth_gate_entrypoint(ctx) -> None:
         if packet.topic != AUTH_COMMAND_TOPIC:
             return
         controller = controller_for(packet.participant.identity)
+        logger.info(
+            "livekit_auth_command_received action=%s",
+            command,
+        )
 
         async def handle_auth_command() -> None:
             identity = packet.participant.identity
-            if command in {REQUEST_PRIVATE_MODE, RETRY_VOICE}:
-                active_task = turn_tasks.get(identity)
-                if active_task is not None and not active_task.done():
-                    active_task.cancel()
-                processing_turns.discard(identity)
-                turn_controller_for(identity).begin_authentication()
-                auth_progress_elapsed_ms[identity] = -1
-                if audio_source is not None:
-                    audio_source.clear_queue()
-                decision = controller.request_private_mode()
-            elif command == CANCEL_PRIVATE_MODE:
-                turn_controller_for(identity).reset()
-                decision = controller.cancel()
-                auth_progress_elapsed_ms[identity] = -1
-                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
-            elif command in {RESUME_CONVERSATION, CONTINUE_AS_GUEST}:
-                turn_controller_for(identity).reset()
-                if audio_source is not None:
-                    audio_source.clear_queue()
-                try:
-                    decision = controller.resume_conversation()
-                except RuntimeError:
-                    await send_event(
-                        identity,
-                        event_type="state",
-                        state=VoiceAgentState.ERROR,
-                        message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
-                    )
+            try:
+                if command in {REQUEST_PRIVATE_MODE, RETRY_VOICE}:
+                    active_task = turn_tasks.get(identity)
+                    if active_task is not None and not active_task.done():
+                        active_task.cancel()
+                    processing_turns.discard(identity)
+                    turn_controller_for(identity).begin_authentication()
+                    auth_progress_elapsed_ms[identity] = -1
+                    if audio_source is not None:
+                        audio_source.clear_queue()
+                    decision = controller.request_private_mode()
+                elif command == CANCEL_PRIVATE_MODE:
+                    turn_controller_for(identity).reset()
+                    decision = controller.cancel()
+                    auth_progress_elapsed_ms[identity] = -1
+                    resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
+                elif command in {RESUME_CONVERSATION, CONTINUE_AS_GUEST}:
+                    turn_controller_for(identity).reset()
+                    if audio_source is not None:
+                        audio_source.clear_queue()
+                    try:
+                        decision = controller.resume_conversation()
+                    except RuntimeError:
+                        await send_event(
+                            identity,
+                            event_type="state",
+                            state=VoiceAgentState.ERROR,
+                            message="Hãy hoàn tất voice challenge trước khi bắt đầu nói.",
+                        )
+                        return
+                    resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
+                else:
                     return
-                resume_guard_until[identity] = monotonic() + settings.auth_resume_guard_seconds
-            else:
-                return
-            await send_status(identity, decision, controller=controller)
+                await send_status(identity, decision, controller=controller)
+                logger.info(
+                    "livekit_auth_command_applied action=%s phase=%s",
+                    command,
+                    controller.challenge_status().phase.value,
+                )
+            except Exception:
+                logger.exception(
+                    "livekit_auth_command_failed action=%s",
+                    command,
+                )
+                await send_event(
+                    identity,
+                    event_type="state",
+                    state=VoiceAgentState.ERROR,
+                    message="Không thể cập nhật trạng thái voice. Vui lòng thử lại.",
+                )
 
         asyncio.create_task(handle_auth_command())
 

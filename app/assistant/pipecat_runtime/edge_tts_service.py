@@ -83,6 +83,11 @@ class StreamingTTSPipecatService(FrameProcessor):
             return
         if isinstance(frame, VoiceTTSSpeakFrame):
             if frame.text.strip():
+                logger.info(
+                    "tts_speak_frame_received turn_id=%s text_chars=%s",
+                    frame.turn_id,
+                    len(frame.text),
+                )
                 self._active_task = self.create_task(
                     self._synthesize(frame), name=f"synthesize-{frame.turn_id}"
                 )
@@ -151,6 +156,15 @@ class StreamingTTSPipecatService(FrameProcessor):
         emitted_audio: bool,
         emitted_state: list[bool],
     ) -> bool:
+        chunk_count = 0
+        audio_bytes = 0
+        started_at = asyncio.get_running_loop().time()
+        logger.info(
+            "tts_provider_started turn_id=%s provider=%s text_chars=%s",
+            frame.turn_id,
+            provider.name,
+            len(frame.text),
+        )
         async for chunk in provider.stream(frame.text):
             if not isinstance(chunk, TTSChunk):
                 raise TypeError(f"{provider.name} returned an invalid TTS chunk.")
@@ -169,6 +183,15 @@ class StreamingTTSPipecatService(FrameProcessor):
                     self._started_turns.add(frame.turn_id)
                     await self.push_frame(TTSStartedFrame(context_id=frame.turn_id))
                     await self._on_audio_started(frame.turn_id)
+                    logger.info(
+                        "tts_first_pcm_enqueued turn_id=%s provider=%s sample_rate=%s audio_bytes=%s",
+                        frame.turn_id,
+                        provider.name,
+                        chunk.sample_rate,
+                        len(chunk.audio),
+                    )
+            chunk_count += 1
+            audio_bytes += len(chunk.audio)
             await self.push_frame(
                 TTSAudioRawFrame(
                     audio=chunk.audio,
@@ -177,6 +200,14 @@ class StreamingTTSPipecatService(FrameProcessor):
                     context_id=frame.turn_id,
                 )
             )
+        logger.info(
+            "tts_provider_finished turn_id=%s provider=%s chunks=%s audio_bytes=%s elapsed_ms=%.1f",
+            frame.turn_id,
+            provider.name,
+            chunk_count,
+            audio_bytes,
+            (asyncio.get_running_loop().time() - started_at) * 1000,
+        )
         if not emitted_audio:
             raise RuntimeError(f"{provider.name} returned no audio.")
         return emitted_audio
