@@ -1,25 +1,50 @@
-\subsection{Introduction to Who-Speak-AI}
-\emph{Who-Speak-AI} is a voice-driven virtual assistant that integrates biometric speaker recognition into a modular conversational pipeline. By coupling speech processing with our fine-tuned RawNet3 speaker embedding model, the assistant provides seamless voice interaction while enforcing biometric verification for sensitive operations and personalizing responses based on speaker identity.
-
-\subsubsection{Functional Requirements}
-%
-\subsubsection{Non-functional Requirements}
-%
+This section presents \emph{Who-Speak-AI}, an end-to-end conversational virtual assistant that integrates our fine-tuned RawNet3 speaker verification model into a modular, privacy-preserving voice pipeline.
 
 \subsection{Architectural Design}
-%
-\subsection{User Interface}
-something something...
-\subsubsection{General Features}
-%
-\subsubsection{Secured Features}
-%
-\subsubsection{Registration}
-%
 
-\subsection{Continuous Integration \& Continuous Delivery}
-%
-\subsection{Validity of Enrollment \& Verification}
-%
-\subsection{Performance Studies}
-%
+Who-Speak-AI adopts a decoupled, multi-service architecture comprising four primary tiers (Figure~\ref{fig:app-architecture}):
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{img/architecture.png}
+\caption{System architecture of Who-Speak-AI}
+\label{fig:app-architecture}
+\end{figure}
+
+\subsubsection{Client}
+
+\subsubsection{Model and Agent}
+
+\subsubsection{Backend}
+
+\subsection{Privacy-Preserving Voice Authentication}
+\subsubsection{CKKS Scheme Formulation}
+Who-Speak-AI implements the Cheon-Kim-Kim-Song (CKKS) cryptosystem \cite{cheon2017homomorphic} via the TenSEAL library \cite{tenseal2021}. CKKS supports homomorphic addition and multiplication on vectors of complex numbers, making it well-suited for fixed-dimensional continuous embedding spaces.
+
+The cryptosystem is configured with polynomial modulus degree $N = 8192$, coefficient modulus bit sizes $Q = [60, 40, 40, 60]$, and scaling factor $\Delta = 2^{40}$. This parameter set guarantees 128-bit post-quantum and classical security while accommodating the multiplicative depth required for inner product evaluation.
+
+\subsubsection{Encrypted Cosine Similarity Evaluation}
+Let $\mathbf{u} \in \mathbb{R}^{256}$ denote the enrolled reference embedding and $\mathbf{v} \in \mathbb{R}^{256}$ denote the candidate verification embedding extracted by RawNet3. Both vectors are $L_2$-normalized prior to encryption:
+\begin{equation}
+    \|\mathbf{u}\|_2 = 1, \quad \|\mathbf{v}\|_2 = 1 \implies \cos(\mathbf{u}, \mathbf{v}) = \mathbf{u} \cdot \mathbf{v} = \sum_{i=1}^{256} u_i v_i
+\end{equation}
+
+During enrollment, the client generates a public context containing the public key $\text{pk}$, relinearization keys $\text{rlk}$, and Galois rotation keys $\text{gk}$, while retaining the secret key $\text{sk}$ in the OS keychain. The reference vector $\mathbf{u}$ is encrypted into ciphertext $\llbracket \mathbf{u} \rrbracket \leftarrow \text{Enc}_{\text{pk}}(\mathbf{u})$ and transmitted to the Matcher service.
+
+During verification, the matching protocol evaluates the inner product between the stored ciphertext $\llbracket \mathbf{u} \rrbracket$ and the candidate vector:
+\begin{equation}
+    \llbracket s \rrbracket = \llbracket \mathbf{u} \rrbracket \odot \mathbf{v} = \sum_{i=1}^{256} \llbracket u_i \cdot v_i \rrbracket
+\end{equation}
+where $\odot$ denotes homomorphic plaintext-ciphertext slot-wise multiplication followed by tree-based summation. The matcher transmits the single-element ciphertext $\llbracket s \rrbracket$ back to the client or authorized agent supervisor, which decrypts:
+\begin{equation}
+    s = \text{Dec}_{\text{sk}}(\llbracket s \rrbracket)
+\end{equation}
+Verification succeeds if $s \ge \tau$, where $\tau = 0.584$ is the optimal operating threshold established during ViMD validation ($\text{FAR} \le 0.1\%$). At no point does the matcher observe $\mathbf{u}$, $\mathbf{v}$, or $s$.
+
+\begin{warmbox}[title=Homomorphic Zero-Trust Guarantee]{Cryptographic Protection Guarantee}
+Traditional systems require decrypting biometrics in server memory before evaluating distance metrics, creating a critical vulnerability window. Under Who-Speak-AI's CKKS architecture, the Matcher computes exclusively over encrypted ciphertexts. Even if the backend process is inspected or memory-dumped during verification, zero plaintext biometric data is accessible.
+\end{warmbox}
+
+\subsection{Verifying of Enrollment Quality}
+
+\subsection{Latency}

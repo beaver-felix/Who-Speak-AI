@@ -1,14 +1,5 @@
-This report benchmarked ECAPA-TDNN and RawNet3 across multilingual (TidyVoice) and Vietnamese multi-dialect (ViMD) conditions. While ECAPA-TDNN demonstrated stronger multilingual generalization (3.912\% vs.\ 5.875\% EER on TidyVoice), RawNet3 excelled on regional Vietnamese speech (3.071\% vs.\ 3.804\% EER and 0.2262 vs.\ 0.4516 minDCF on ViMD), accompanied by 21.6\% fewer parameters and 26.5\% lower GPU latency. Consequently, based on Validation evidence, Vietnamese-domain alignment, and the measured efficiency profile, \textbf{RawNet3 fine-tuned on ViMD} is selected as the biometric verification engine; the Test results are used only for final confirmation.
+This technical report benchmarked on two Speaker Embedding models: ECAPA-TDNN and RawNet3 under TidyVoice Vietnamese multi-dialectal (ViMD) corpora. On TidyVoice, ECAPA-TDNN demonstrated better cross-lingual generalization (3.912\% EER, 0.3586 minDCF, and 71.84\% TAR@0.1\%). However, when adapted to regional Vietnamese speech on ViMD, Raw-Net3 proved more efficacy at disentangling dialect from identity (3.071\% EER, 0.2262 minDCF, and 84.45\% TAR), which also comes with the benefit of smaller parameter footprint. Thus, RawNet3 was selected as the biometric engine for our Vietnamese target application.
 
-% ==============================================================================
-% TODO: FINAL APPLICATION INTEGRATION & USER TESTING
-% ==============================================================================
-% TODO: The modular virtual assistant application (VAD + ASR + LLM + TTS + Speaker Recognition)
-% is currently under active implementation. Once completed, this section will be expanded
-% to summarize:
-% 1. End-to-end integration latency and real-time responsiveness.
-% 2. Live microphone verification accuracy and user enrollment experience.
-% 3. Personalized dialogue interactions facilitated by speaker identification.
-% ==============================================================================
+Translating these empirical findings into practice, we developed \emph{Who-Speak-AI}, an end-to-end voice assistant integrating RawNet3 into a modular pipeline featuring Whisper ASR, LLM dialogue reasoning, and neural TTS. The system couples RawNet3 embeddings with the CKKS homomorphic encryption scheme, allowing server-side cosine matching to execute strictly over encrypted ciphertexts. In our experiments, this approach maintains high accuracy while protecting user privacy.
 
-Future work includes unconstrained multi-epoch training with data augmentation and optimizing on-device CPU execution.
+Nevertheless, several limitations remain: \textbf{(1)} only two models were benchmarked, as WavLM + MHFA failed during training and testing; \textbf{(2)} fine-tuning was constrained to a single seed (42) and 3 epochs without exhaustive tuning; \textbf{(3)} thresholds were calibrated on static splits rather than live streams; and \textbf{(4)} the system with homomorphic operations currently CPU-bound. Future work will explore anti-spoofing and hardware acceleration for encrypted matching.

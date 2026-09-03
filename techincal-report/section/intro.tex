@@ -11,10 +11,10 @@ However, Speaker Identification in real-world settings remains a challenging tas
 Motivated by these considerations, this project provides a concise introduction to Speaker Identification and presents a systematic analysis and comparison of several methods and models grounded in Statistical Machine Learning, with the overarching goal of advancing Speaker Verification for reliable and efficient virtual assistants.
 
 \subsection{Our Contributions}
-The main contributions of this project are threefold:
+This work provides three key contributions:
 
 \begin{enumerate}
-    \item \textbf{Dataset curation.} We select two publicly available datasets tailored to our concerns regarding practical Speaker Identification. The \emph{ViMD} dataset captures diverse dialectal variation across Vietnamese regions, while the \emph{TidyVoice2026} dataset provides a broader, multilingual corpus that tests robustness for global deployment. Together, these datasets allow us to evaluate model performance under both language-specific and language-agnostic conditions.
+    \item \textbf{Dataset curation.} We benchmark speaker verification across two complementary corpora: the regional \emph{ViMD} dataset, capturing Vietnamese multi-dialectal variations, and the multilingual \emph{TidyVoice2026} corpus, assessing cross-lingual robustness under standardized verification protocols.
 
     \item \textbf{Model benchmarking.} We benchmark two speaker embedding architectures---RawNet3 and ECAPA-TDNN---after target-domain fine-tuning on both datasets. All reported EER, minDCF, FAR, FRR, and TAR results are obtained under a shared speaker-verification protocol.
 
