@@ -44,6 +44,7 @@ LiveKit Server (SFU, ws://127.0.0.1:7880)
 | Requirement | Version | Why |
 |-------------|---------|-----|
 | **Python** | 3.12.x (`>=3.12, <3.13`) | Backend services, ML inference, agent workers |
+| **uv** | Latest (`>=0.4.0`) | Fast Python package and virtual environment manager |
 | **Node.js** | 20+ or 22+ LTS (`>=20.19.0 \|\| >=22.12.0`) | Vite dev server and React frontend build |
 | **LiveKit Server** | Latest stable binary | WebRTC media routing at `ws://127.0.0.1:7880` |
 | **OS Keychain** | macOS Keychain / Linux Secret Service | Stores private CKKS encryption keys securely |
@@ -52,26 +53,27 @@ LiveKit Server (SFU, ws://127.0.0.1:7880)
 
 ## Getting Started
 
-### 1. Clone and set up Python
+### 1. Clone and set up Python with `uv`
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/beaver-felix/Who-Speak-AI.gits
 cd Who-Speak-AI
 
-python3.12 -m venv .venv
+# Create and activate a Python 3.12 virtual environment
+uv venv --python 3.12 .venv
 source .venv/bin/activate
 
-# Install PyTorch (CPU or CUDA)
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch for your platform (CPU or CUDA)
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install all dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
 
-Or install in editable mode with all extras:
+Alternatively, install in editable mode with all extras:
 
 ```bash
-pip install -e "app/voice_verification[ui,matcher,he,model,agent,gateway,pipecat,providers,test]"
+uv pip install -e "app/voice_verification[ui,matcher,he,model,agent,gateway,pipecat,providers,test]"
 ```
 
 ### 2. Configure environment
@@ -188,7 +190,7 @@ Who-Speak-AI/
 
 ```bash
 # Backend tests
-pytest app/voice_verification/tests/
+uv run pytest app/voice_verification/tests/
 
 # Frontend tests
 cd app/web && npm test
