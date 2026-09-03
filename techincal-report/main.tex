@@ -10,10 +10,23 @@
 % Modern Typography (1.15x scale for high readability)
 \usepackage[default,semibold,scale=1.15]{sourcesanspro}
 \usepackage[scale=1.05]{sourcecodepro}
+\usepackage[htt]{hyphenat}
 \usepackage{microtype}
 \usepackage{amsmath,amssymb}
 \providecommand{\llbracket}{[\![}
 \providecommand{\rrbracket}{]\!]}
+
+% Allow breaking at underscores and hyphens in texttt / code identifiers
+\DeclareRobustCommand{\_}{%
+  \ifmmode
+    \text{\textunderscore}\allowbreak
+  \else
+    \textunderscore\allowbreak
+  \fi
+}
+\emergencystretch=2.5em
+\hfuzz=1pt
+
 
 % Page Geometry (A4 Paper: 210mm x 297mm)
 \usepackage[

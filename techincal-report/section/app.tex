@@ -23,7 +23,10 @@ The presentation layer comprises a production web client and an offline diagnost
 \textbf{System \& Media Transport:} Python 3.12 backend and Node.js frontend. Media routing is handled by \textbf{LiveKit Server} (SFU) with 16~kHz mono PCM ingress and 48~kHz mono PCM egress in the Pipecat transport layer.
 \textbf{Conversational Pipeline (Pipecat):} Orchestrated by \textbf{Pipecat} in a framed asynchronous flow:
 \begin{equation}
-    \text{LiveKit In} \longrightarrow \text{AuthRouter} \longrightarrow \text{VAD} \longrightarrow \text{Smart Turn} \longrightarrow \text{STT} \longrightarrow \text{LLM} \longrightarrow \text{TTS} \longrightarrow \text{LiveKit Out}
+\begin{aligned}
+    \text{LiveKit In} &\longrightarrow \text{AuthRouter} \longrightarrow \text{VAD} \longrightarrow \text{Smart Turn} \\
+    &\longrightarrow \text{STT} \longrightarrow \text{LLM} \longrightarrow \text{TTS} \longrightarrow \text{LiveKit Out}
+\end{aligned}
 \end{equation}
 A \texttt{UserBotLatencyObserver} continuously profiles user-to-bot conversational latency across stages.
 \textbf{Session Supervisor:} A FastAPI daemon (port 8021) spawns per-room workers via HMAC-SHA256 signed session descriptors from the Gateway, enforcing a 45~s join timeout and managing room lifecycle.
@@ -66,7 +69,7 @@ Tool Policy & PolicyToolExecutor & Native Python & State-gated execution; \textt
 
 \textbf{Turn-Taking and Endpointing (Smart Turn v3).} Conventional fixed-silence timers prematurely interrupt speakers during natural cognitive pauses. Who-Speak-AI integrates Smart Turn v3 (\texttt{smart\_turn\_v3.onnx}) running on ONNX Runtime ($\ge 1.17$). When Silero signals a silence boundary, Smart Turn ingests the buffered audio and runs an end-of-turn classifier evaluating prosodic, acoustic, and linguistic completion cues. If the turn is predicted to be ongoing, cut-off is suppressed for up to an additional 2~s (\texttt{VOICE\_SMART\_TURN\_MAX\_WAIT\_SECONDS=2}). An in-memory RMS turn buffer (\texttt{LocalSpeechTurnBuffer}, amplitude threshold 0.012) provides a deterministic fallback.
 
-\textbf{Speech-to-Text (PhoWhisper).} User speech is transcribed locally using \texttt{faster-whisper} with the \texttt{vudang449/PhoWhisper-small-ct2} checkpoint---a Vietnamese-specialized CTranslate2 model running in \texttt{int8} quantization on CPU (\texttt{VOICE\_WHISPER\_MODEL}, \texttt{VOICE\_WHISPER\_COMPUTE\_TYPE=int8}). Operating at 16~kHz mono with a forced language prior (\texttt{language="vi"}), the engine decodes audio directly in system memory without dispatching waveforms or transcripts to any external cloud service.
+\textbf{Speech-to-Text (PhoWhisper).} User speech is transcribed locally using \texttt{faster-whisper} with the \texttt{vudang449/\allowbreak PhoWhisper-small-ct2} checkpoint---a Vietnamese-specialized CTranslate2 model running in \texttt{int8} quantization on CPU (\texttt{VOICE\_WHISPER\_MODEL}, \texttt{VOICE\_WHISPER\_COMPUTE\_TYPE=int8}). Operating at 16~kHz mono with a forced language prior (\texttt{language="vi"}), the engine decodes audio directly in system memory without dispatching waveforms or transcripts to any external cloud service.
 
 \textbf{Conversational Reasoning (OpenAI LLM).} Clean transcripts are dispatched to OpenAI via the streaming Responses API. The model is configured via \texttt{OPENAI\_MODEL} (default \texttt{gpt-5}). The cognitive core is strictly decoupled from Voice Verification data:
 \begin{itemize}
