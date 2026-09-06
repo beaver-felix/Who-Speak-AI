@@ -57,3 +57,5 @@ def test_openai_payload_contains_transcript_and_capability_not_sensitive_voice_d
     assert "audio" not in serialized
     assert "Trusted VoiceAuth state for this request: guest" in responses.kwargs["instructions"]
     assert "Private Calendar access: not granted" in responses.kwargs["instructions"]
+    assert "Calendar tool result, that request has already finished" in responses.kwargs["instructions"]
+    assert "Never say you are checking, waiting" in responses.kwargs["instructions"]

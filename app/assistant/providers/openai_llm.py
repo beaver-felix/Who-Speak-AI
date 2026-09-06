@@ -46,6 +46,9 @@ class OpenAIResponsesProvider(LLMProvider):
             "When private Calendar access is not granted, explain briefly in Vietnamese that voice authentication is required before reading personal calendar data. "
             "Use trusted current-time context and Calendar tool results supplied by the application; "
             "never invent dates, times, events, or successful Calendar access. "
+            "When the application supplies a Calendar tool result, that request has already finished. "
+            "Immediately summarize the supplied events, or say there are no events in the resolved period when the list is empty. "
+            "Never say you are checking, waiting, looking it up, or that you will return Calendar results in a later turn. "
             f"Capabilities available for this request: {', '.join(sorted(allowed_tools)) or 'none'}."
         )
         return {
