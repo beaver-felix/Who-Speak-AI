@@ -248,8 +248,6 @@ cd app/web && npm test
 
 ## Documentation
 
-- [STACK.md](STACK.md) — Full technology stack with exact version constraints
-- [GUIDE_RAWNET3.md](GUIDE_RAWNET3.md) — RawNet3 model training and evaluation
 - [app/voice_verification/README.md](app/voice_verification/README.md) — Speaker verification, HE details, agent lifecycle
 - [app/web/README.md](app/web/README.md) — Web client architecture and setup
 
