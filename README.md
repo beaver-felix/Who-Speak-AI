@@ -7,35 +7,52 @@ A privacy-preserving, voice-authenticated virtual assistant. Who-Speak-AI combin
 ## What It Does
 
 1. **You register and enroll your voice** — three spoken samples are processed into a 256-dimensional speaker embedding using a fine-tuned RawNet3 model.
-2. **Your voiceprint is encrypted** — the embedding is encrypted client-side with CKKS homomorphic encryption (TenSEAL). The server only ever sees ciphertext.
-3. **You talk to the assistant** — a real-time voice pipeline connects you through WebRTC (LiveKit), transcribes your speech locally with Whisper, generates replies with GPT-5, and speaks back using ZeroTTS — all in Vietnamese.
+2. **Your voiceprint is encrypted** — the embedding is encrypted with CKKS homomorphic encryption (TenSEAL) before it crosses the Matcher API boundary. The Matcher API only receives ciphertext.
+3. **You talk to the assistant** — a real-time Pipecat pipeline connects you through WebRTC (LiveKit), transcribes your speech locally with PhoWhisper, generates replies with the configured OpenAI model, and speaks back using ZeroTTS — all in Vietnamese.
 4. **Private tools require voice auth** — before the assistant accesses your calendar or personal data, it challenges you to speak and verifies your identity against the encrypted voiceprint. No match, no access.
 
 ---
 
 ## Architecture Overview
 
+<p align="center">
+  <img src="img/system_architecture.png" alt="Who-Speak-AI system architecture" width="100%">
+</p>
+
+<p align="center"><em>System architecture of Who-Speak-AI.</em></p>
+
+The active local voice path is the Pipecat runtime. The legacy LiveKit Agents
+implementation remains available as an alternate runtime and should not be run
+alongside Pipecat in the same room.
+
+```text
+Browser → LiveKit SFU → Pipecat AuthRouterProcessor
+                         ├─ voice challenge → RawNet3 → encrypted Matcher API
+                         └─ conversation audio → VAD → Smart Turn → STT
+                                                   → Conversation/LLM → TTS
+                                                   → LiveKit audio output
 ```
-Browser (React 19 + LiveKit Client)
-    │
-    │  WebRTC audio + data channels
-    ▼
-LiveKit Server (SFU, ws://127.0.0.1:7880)
-    │
-    ├──► Pipecat Runtime (or LiveKit Agent)
-    │       ├── Silero VAD → Smart Turn v3 → Local Whisper STT
-    │       ├── OpenAI GPT-5 (streaming LLM)
-    │       ├── ZeroTTS / Edge-TTS (streaming TTS)
-    │       └── Voice Auth Gate → RawNet3 → HE Matcher
-    │
-    ├──► Assistant Gateway (:8020, FastAPI)
-    │       ├── User accounts & sessions (SQLite)
-    │       ├── Voice enrollment
-    │       └── LiveKit token issuance
-    │
-    └──► Matcher API (:8011, FastAPI)
-            └── Ciphertext-only speaker matching (SQLite, zero plaintext)
-```
+
+`AuthRouterProcessor` is the first processor in the Pipecat pipeline. During a
+voice challenge it captures or discards audio and does not forward it to VAD,
+STT, the LLM, or TTS. General conversation may run as Guest, while private
+Calendar tools require successful VoiceAuth and an active Google Calendar
+connection.
+
+## Technical Inventory
+
+| Subsystem | Model / Technology | Runtime | Operational configuration |
+|------------|--------------------|---------|---------------------------|
+| VAD | Silero VAD v5 | Pipecat / PyTorch | Confidence `≥ 0.7`; `384 ms` onset; `650 ms` silence; `20 s` maximum utterance |
+| Turn-taking | Smart Turn v3.2 (`.onnx`) | Pipecat / ONNX Runtime | Whisper-style log-Mel input; model window up to `8 s`; force-stop wait up to `2 s` |
+| Speech-to-text | PhoWhisper-small-ct2 | faster-whisper / CTranslate2 | CPU `int8`; `16 kHz` mono; language `vi`; in-memory decoding |
+| LLM reasoning | OpenAI (`OPENAI_MODEL`) | AsyncOpenAI Responses API | Streaming response; model selected by environment (`gpt-5-nano` in the local setup) |
+| TTS chunking | SentenceBuffer | Custom Python | Splits at punctuation or `VOICE_TTS_MAX_SENTENCE_CHARS` (`120`) before TTS |
+| Neural TTS | ZeroTTS (`maichi`) | ONNX Runtime | Local `48 kHz` mono stream; Edge-TTS fallback |
+| Speaker verification | RawNet3 (ViMD fine-tuned) | PyTorch / Sinc-Conv | `256-D` L2-normalized embeddings |
+| Encryption | TenSEAL CKKS | TenSEAL `0.3.16` | Polynomial degree `8192`; coefficient moduli `[60, 40, 40, 60]`; global scale `2^40` |
+| Key protection | OS keychain | `keyring` | CKKS private context is unavailable to the Matcher API and browser |
+| Tool policy | PolicyToolExecutor | Native Python | Auth-state-gated Calendar access through the gateway; local MCP or mock provider by configuration |
 
 ---
 
@@ -146,7 +163,7 @@ Who-Speak-AI/
 │   ├── assistant/                  # Real-time voice agent pipeline
 │   │   ├── pipecat_runtime/        # Pipecat 1.8.1 pipeline & session supervisor
 │   │   ├── providers/              # Whisper, ZeroTTS, Edge-TTS, OpenAI LLM
-│   │   ├── tools/                  # PolicyToolExecutor + MockCalendarProvider
+│   │   ├── tools/                  # PolicyToolExecutor + gateway-backed CalendarProvider
 │   │   ├── simulations/            # YAML dialogue scenarios for policy tests
 │   │   ├── livekit_agent.py        # LiveKit Agents-based runtime (alternate)
 │   │   ├── config.py               # All runtime configuration from env vars
@@ -181,8 +198,8 @@ Who-Speak-AI/
 |-------|-----------|---------|
 | **Voice Activity Detection** | Silero VAD v5 | Neural VAD with 0.7 confidence threshold |
 | **Turn Detection** | Smart Turn v3 | Local ONNX model preventing premature cut-offs |
-| **Speech-to-Text** | faster-whisper (`base` model) | CTranslate2-accelerated, configured for Vietnamese |
-| **Language Model** | OpenAI GPT-5 | Streaming responses via the Responses API |
+| **Speech-to-Text** | PhoWhisper-small-ct2 | CTranslate2 int8 on CPU, configured for Vietnamese |
+| **Language Model** | OpenAI (`OPENAI_MODEL`) | Streaming responses via the Responses API |
 | **Text-to-Speech** | ZeroTTS (`maichi` voice) | Local 48 kHz neural streaming, Edge-TTS fallback |
 
 ### Speaker Verification
@@ -191,8 +208,12 @@ Who-Speak-AI/
 |-----------|---------|
 | **Model** | RawNet3, fine-tuned on ViMD dataset, 256-D embeddings |
 | **Encryption** | CKKS homomorphic encryption (TenSEAL), `poly_modulus_degree=8192` |
-| **Matching** | Encrypted cosine similarity — server never sees plaintext embeddings |
+| **Matching** | Encrypted squared Euclidean distance; trusted voice-auth code derives cosine similarity after decryption |
 | **Key Storage** | OS keychain via `keyring` (`who-speak.voice-he` service) |
+
+![Voice verification workflow](img/speak_verification.png)
+
+<p align="center"><em>Voice verification workflow: RawNet3 embedding, CKKS encryption, ciphertext-only matching, and the final authorization decision.</em></p>
 
 ### Security
 
