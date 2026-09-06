@@ -15,7 +15,7 @@ A privacy-preserving, voice-authenticated virtual assistant. Who-Speak-AI combin
 
 ## Demo
 
-![](https://github.com/user-attachments/assets/623f11a5-04ff-4c4f-96d2-7422f9cf93e2)
+https://github.com/user-attachments/assets/623f11a5-04ff-4c4f-96d2-7422f9cf93e2
 
 ---
 
